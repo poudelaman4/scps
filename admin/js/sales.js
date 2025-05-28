@@ -167,6 +167,7 @@ function getSelectedDateRange() {
  }
 
 if (salesDateRangeSelect) {
+    // FIX: Corrected typo from salesDateSelect to salesDateRangeSelect
     salesDateRangeSelect.addEventListener('change', function() {
         if (this.value === 'custom') {
             customDateRangeContainer.classList.remove('hidden');
@@ -182,6 +183,7 @@ if (salesDateRangeSelect) {
             }
         } else {
             customDateRangeContainer.classList.add('hidden');
+            console.log('Date range changed to predefined: ' + this.value + '. Calling fetchAllSalesData().'); // DEBUG
             fetchAllSalesData(); // Fetch data immediately for predefined ranges
         }
     });
@@ -189,7 +191,10 @@ if (salesDateRangeSelect) {
 
 // Event listener for the "Apply Custom Range" button
 if (applyCustomRangeBtn) {
-    applyCustomRangeBtn.addEventListener('click', fetchAllSalesData);
+    applyCustomRangeBtn.addEventListener('click', function() {
+        console.log('Apply Custom Range button clicked. Calling fetchAllSalesData().'); // DEBUG
+        fetchAllSalesData();
+    });
 }
 
 // Initialize charts (call this AFTER data is loaded and stored)
@@ -365,6 +370,10 @@ if (applyCustomRangeBtn) {
      const queryParams = new URLSearchParams();
      if (startDate) queryParams.append('startDate', startDate);
      if (endDate) queryParams.append('endDate', endDate);
+     // Add category filter to sales summary fetch
+     const category = getSelectedCategory('salesCategoryFilter');
+     if (category !== 'all') queryParams.append('category', category);
+
 
      try {
          const response = await fetch(`./api/fetch_sales_summary.php?${queryParams.toString()}`);
@@ -425,6 +434,9 @@ if (applyCustomRangeBtn) {
      if (startDate) queryParams.append('startDate', startDate);
      if (endDate) queryParams.append('endDate', endDate);
      queryParams.append('granularity', granularity);
+     // Add category filter to revenue trend fetch
+     const category = getSelectedCategory('salesCategoryFilter');
+     if (category !== 'all') queryParams.append('category', category);
 
 
      try {
@@ -478,6 +490,7 @@ if (applyCustomRangeBtn) {
 
  // Fetch Top Selling Items (for Chart AND Table)
   async function fetchTopSellingItems(startDate, endDate, category = 'all') {
+       console.log('fetchTopSellingItems called with:', { startDate, endDate, category }); // DEBUG: Log parameters
        const chartContainer = document.getElementById('topProductsChart').parentElement;
        const tableBody = document.getElementById('topItemsTableBody'); // Get the table body element
 
@@ -492,7 +505,7 @@ if (applyCustomRangeBtn) {
              chartContainer.innerHTML = '<canvas id="topProductsChart"></canvas>';
              chartCanvas = document.getElementById('topProductsChart');
         }
-         chartContainer.querySelectorAll('.chart-message').forEach(msgEl => msgEl.remove());
+         chartContainer.querySelectorAll('.chart-message').forEach(msgEl => msgEl.remove()); // Corrected msgL to msgEl
          const chartLoadingMessage = document.createElement('p');
          chartLoadingMessage.textContent = 'Loading Top Products Chart...';
          chartLoadingMessage.classList.add('chart-message'); // Removed text-gray-700, handled by CSS
@@ -508,11 +521,15 @@ if (applyCustomRangeBtn) {
       if (endDate) queryParams.append('endDate', endDate);
       if (category) queryParams.append('category', category);
 
+      const apiUrl = `./api/fetch_top_selling_items.php?${queryParams.toString()}`;
+      console.log('Fetching Top Selling Items from URL:', apiUrl); // DEBUG: Log the full API URL
+
 
       try {
-          const response = await fetch(`./api/fetch_top_selling_items.php?${queryParams.toString()}`);
-
-          // Remove loading messages
+          const response = await fetch(apiUrl); // Use the constructed URL
+          // DEBUG: Log the raw response status and text
+          console.log('Top Selling Items API Response Status:', response.status, response.statusText);
+          // FIX: Corrected variable name from 'loadingMessage' to 'chartLoadingMessage'
           if (chartLoadingMessage) chartLoadingMessage.remove();
 
 
@@ -539,6 +556,9 @@ if (applyCustomRangeBtn) {
           }
 
           const data = await response.json();
+          // DEBUG: Log the parsed JSON data
+          console.log('Top Selling Items API Response Data:', data);
+
 
           if (data.success && data.top_items && data.top_items.length > 0) {
                console.log('fetchTopSellingItems: Data found. Updating UI.');
@@ -584,6 +604,7 @@ if (applyCustomRangeBtn) {
          const data = await response.json();
 
          if (response.ok && data.success && data.categories && data.categories.length > 0) {
+             console.log('Fetched categories data structure:', data.categories); // IMPORTANT: Debugging line
              updateCategoryFilters(data.categories); // Update both dropdowns
          } else {
              console.warn('fetchCategories: No categories found or error:', data.message);
@@ -600,27 +621,42 @@ if (applyCustomRangeBtn) {
       const salesCategoryFilter = document.getElementById('salesCategoryFilter');
       const topItemsTableCategoryFilter = document.getElementById('topItemsTableCategoryFilter');
 
-      if (salesCategoryFilter) {
-          // Clear existing options except 'all'
-          salesCategoryFilter.innerHTML = '<option value="all">All Categories</option>';
-          categories.forEach(category => {
-              const option = document.createElement('option');
-              option.value = category.name; // Assuming category object has a 'name' property
-              option.textContent = htmlspecialchars(category.name);
-              salesCategoryFilter.appendChild(option);
-          });
-      }
+      // Helper to update a single select element and preserve selection
+      const populateAndSelect = (selectElement) => {
+          if (!selectElement) return;
 
-      if (topItemsTableCategoryFilter) {
-           // Clear existing options except 'all'
-          topItemsTableCategoryFilter.innerHTML = '<option value="all">All Categories</option>';
-          categories.forEach(category => {
+          const currentSelectedValue = selectElement.value; // Capture current selection BEFORE clearing
+
+          selectElement.innerHTML = ''; // Clear existing options
+
+          const allOption = document.createElement('option');
+          allOption.value = 'all';
+          allOption.textContent = 'All Categories';
+          selectElement.appendChild(allOption);
+
+          // Restore 'All Categories' selection if it was previously selected
+          if (currentSelectedValue === 'all') {
+              allOption.selected = true;
+          }
+
+          categories.forEach(cat => {
+              // Be robust: check if category is an object with 'name' or just a string
+              const categoryValue = typeof cat === 'object' && cat !== null && cat.name ? cat.name : String(cat);
+              const categoryText = htmlspecialchars(categoryValue);
+
               const option = document.createElement('option');
-              option.value = category.name; // Assuming category object has a 'name' property
-              option.textContent = htmlspecialchars(category.name);
-              topItemsTableCategoryFilter.appendChild(option);
+              option.value = categoryValue;
+              option.textContent = categoryText;
+
+              if (categoryValue === currentSelectedValue) {
+                  option.selected = true;
+              }
+              selectElement.appendChild(option);
           });
-      }
+      };
+
+      populateAndSelect(salesCategoryFilter);
+      populateAndSelect(topItemsTableCategoryFilter);
  }
 
 
@@ -638,6 +674,7 @@ if (applyCustomRangeBtn) {
 
      if (items && items.length > 0) {
          // Calculate total revenue across all top items for percentage calculation
+         // FIX: Corrected syntax error in reduce function - missing closing parenthesis for arrow function
          const totalRevenueTopItems = items.reduce((sum, item) => sum + (item.total_revenue ?? 0), 0);
 
          items.forEach(item => {
@@ -764,7 +801,7 @@ if (applyCustomRangeBtn) {
 
      if (totalRecords === 0) {
          if (showingFromEl) showingFromEl.textContent = '0';
-         if (showingToEl) showingToToEl.textContent = '0';
+         if (showingToEl) showingToEl.textContent = '0';
      } else {
          const showingFrom = (currentPage - 1) * itemsPerPage + 1;
          const showingTo = Math.min(currentPage * itemsPerPage, totalRecords);
@@ -792,8 +829,8 @@ if (applyCustomRangeBtn) {
  function handleCustomerGrowthPaginationClick(event) {
      const targetId = event.target.id;
      const { startDate, endDate } = getSelectedDateRange();
-     const trendStartDate = salesDateRangeSelect.value === 'alltime' ? null : startDate;
-     const trendEndDate = salesDateRangeSelect.value === 'alltime' ? null : endDate;
+     const trendStartDate = salesDateRangeSelect.value === 'all_time' ? null : startDate;
+     const trendEndDate = salesDateRangeSelect.value === 'all_time' ? null : endDate;
 
      if (targetId === 'customerGrowthPrev' || targetId === 'customerGrowthPrevMobile') {
          if (customerGrowthCurrentPage > 1) {
@@ -814,8 +851,10 @@ if (applyCustomRangeBtn) {
 
  // Function to fetch all necessary data for the sales page
  function fetchAllSalesData() {
+     console.log('fetchAllSalesData called.'); // DEBUG
      const { startDate, endDate } = getSelectedDateRange();
      const category = getSelectedCategory('salesCategoryFilter'); // Category for charts and summary
+     console.log('fetchAllSalesData - Date Range:', { startDate, endDate }, 'Category:', category); // DEBUG
 
      // Fetch data for Sales Summary Cards
      fetchSalesSummary(startDate, endDate);
@@ -824,15 +863,13 @@ if (applyCustomRangeBtn) {
      fetchRevenueTrend(startDate, endDate, 'monthly'); // Default to monthly
 
      // Fetch data for Top Selling Items Chart AND Table
-     const topItemsCategory = getSelectedCategory('topItemsTableCategoryFilter'); // Category for top items
-     fetchTopSellingItems(startDate, endDate, topItemsCategory);
+     fetchTopSellingItems(startDate, endDate, category);
 
      // Fetch data for Customer Growth Table (Pagination is handled inside the function)
      customerGrowthCurrentPage = 1; // Reset pagination on date/category change
      fetchCustomerGrowth(startDate, endDate, customerGrowthCurrentPage, customerGrowthItemsPerPage);
 
-     // Fetch categories for filter dropdowns (only needed once on load)
-     fetchCategories(); // Ensure this is called to populate categories
+     // fetchCategories(); // REMOVED: This is now called only once on DOMContentLoaded
  }
 
 
@@ -846,12 +883,26 @@ if (applyCustomRangeBtn) {
 
      // Category filter change for Charts/Summary
       if (salesCategoryFilterSelect) {
-          salesCategoryFilterSelect.addEventListener('change', fetchAllSalesData); // Refetch all data on category change
+          salesCategoryFilterSelect.addEventListener('change', function() {
+              console.log('salesCategoryFilterSelect changed to:', this.value); // DEBUG
+              const { startDate, endDate } = getSelectedDateRange();
+              const category = this.value; // Get the selected category from THIS dropdown
+
+              // Synchronize the other category filter dropdown
+              if (topItemsTableCategoryFilterSelect) {
+                  topItemsTableCategoryFilterSelect.value = category;
+                  console.log('Synchronized topItemsTableCategoryFilterSelect to:', topItemsTableCategoryFilterSelect.value); // DEBUG
+              }
+              
+              // Call fetchAllSalesData to update all relevant sections with the new category
+              fetchAllSalesData();
+          });
       }
 
      // Category filter change for Top Items Table
       if (topItemsTableCategoryFilterSelect) {
           topItemsTableCategoryFilterSelect.addEventListener('change', function() {
+              console.log('topItemsTableCategoryFilterSelect changed to:', this.value); // DEBUG
               const { startDate, endDate } = getSelectedDateRange();
               const topItemsCategory = getSelectedCategory('topItemsTableCategoryFilter');
               // Only refetch top items data when this specific filter changes
@@ -879,8 +930,8 @@ if (applyCustomRangeBtn) {
               customerGrowthItemsPerPage = parseInt(this.value, 10); // Update items per page state
               customerGrowthCurrentPage = 1; // Reset to first page
               const { startDate, endDate } = getSelectedDateRange();
-              const trendStartDate = salesDateRangeSelect.value === 'alltime' ? null : startDate;
-              const trendEndDate = salesDateRangeSelect.value === 'alltime' ? null : endDate;
+              const trendStartDate = salesDateRangeSelect.value === 'all_time' ? null : startDate;
+              const trendEndDate = salesDateRangeSelect.value === 'all_time' ? null : endDate;
                fetchCustomerGrowth(trendStartDate, trendEndDate, customerGrowthCurrentPage, customerGrowthItemsPerPage); // Fetch data with new settings
           });
       }
@@ -895,7 +946,6 @@ if (applyCustomRangeBtn) {
                    btn.classList.remove('bg-indigo-100', 'text-indigo-800');
                    btn.classList.add('bg-gray-100', 'text-gray-800', 'hover:bg-gray-200');
                });
-               // Removed dark mode classes from here
                this.classList.add('bg-indigo-100', 'text-indigo-800');
                this.classList.remove('bg-gray-100', 'text-gray-800', 'hover:bg-gray-200');
 
@@ -908,13 +958,14 @@ if (applyCustomRangeBtn) {
  }
 
 
- document.addEventListener('DOMContentLoaded', function () {
+ document.addEventListener('DOMContentLoaded', async function () { // Made async to await fetchCategories
      setInitialDateRange(); // Set the default date range dropdown value
      initCharts(); // Initialize charts with empty data initially
      setupEventListeners(); // Setup event listeners
 
-     // Fetch all initial data
-     fetchAllSalesData();
+     // Call fetchCategories FIRST to populate the dropdowns and ensure they are stable
+     await fetchCategories(); // Await this call
 
-     // fetchCategories(); // This is now called inside fetchAllSalesData()
+     // Then fetch all initial sales data
+     fetchAllSalesData();
  });

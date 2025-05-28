@@ -50,7 +50,6 @@ $response = [
         'total_items_sold' => 0,
         'total_transactions' => 0,
         'total_customers' => 0
-        // new_customers and repeat_customers are more complex, will add later
     ]
 ];
 
@@ -62,188 +61,191 @@ $totalCustomers = 0;
 
 
 // Get date range parameters from the GET request
-// Use FILTER_UNSAFE_RAW for dates as FILTER_SANITIZE_STRING can strip characters needed for validation
 $startDate = filter_input(INPUT_GET, 'startDate', FILTER_UNSAFE_RAW);
 $endDate = filter_input(INPUT_GET, 'endDate', FILTER_UNSAFE_RAW);
+$category = filter_input(INPUT_GET, 'category', FILTER_UNSAFE_RAW); // Get category parameter
 
-// --- Debug Log for Raw Input Dates ---
-// This will show the date strings EXACTLY as received from the frontend
-error_log("DEBUG: Raw Input Dates - Start: " . ($startDate ?? 'NULL') . ", End: " . ($endDate ?? 'NULL')); // Handle null for logging
-// --- End Debug Log for Raw Input Dates ---
+
+// --- Debug Log for Raw Input Dates and Category ---
+error_log("DEBUG: Raw Input - Start: " . ($startDate ?? 'NULL') . ", End: " . ($endDate ?? 'NULL') . ", Category: " . ($category ?? 'NULL'));
+// --- End Debug Log ---
 
 $startDateTime = null;
 $endDateTime = null;
 $bindParams = []; // Array to hold parameters for binding
 $bindParamTypes = ""; // String to hold types for binding
-$dateWhereClause = ""; // SQL WHERE clause for date filtering
+$filterClauses = []; // Array to hold individual filter conditions
+$joinClauses = []; // Array to hold join clauses
 
-// Check if dates were provided by the frontend (i.e., not an 'alltime' request)
+// Add mandatory status filter
+$filterClauses[] = "t.status = 'success'";
+
+// Date range filtering
 if ($startDate !== null && $endDate !== null && $startDate !== '' && $endDate !== '') {
-     // Validate date format (YYYY-MM-DD) and if they are valid dates
     $start_timestamp = strtotime($startDate);
     $end_timestamp = strtotime($endDate);
 
     if (!$start_timestamp || !$end_timestamp) {
-         $response['success'] = false; // Set success to false on validation error
-         $response['message'] = 'Invalid date format provided.';
-         error_log('Validation Error (fetch_sales_summary.php): Invalid date format received: Start=' . $startDate . ', End=' . $endDate);
-         // Send error response and exit
-         echo json_encode($response);
-         exit();
+        $response['success'] = false;
+        $response['message'] = 'Invalid date format provided.';
+        error_log('Validation Error (fetch_sales_summary.php): Invalid date format received: Start=' . $startDate . ', End=' . $endDate);
+        echo json_encode($response);
+        exit();
     }
 
-    // Add time component to make date range inclusive up to the end of the day on endDate
-    // Ensure dates are treated in the correct timezone before adding time components
-    // Using DateTime objects with the explicitly set timezone is more reliable
     try {
-        $timezone = new DateTimeZone(date_default_timezone_get()); // Use the timezone set at the top
-
+        $timezone = new DateTimeZone(date_default_timezone_get());
         $start_dt_obj = new DateTime($startDate, $timezone);
         $end_dt_obj = new DateTime($endDate, $timezone);
 
-        $start_dt_obj->setTime(0, 0, 0); // Set time to beginning of start date
-        $end_dt_obj->setTime(23, 59, 59); // Set time to end of end date
+        $start_dt_obj->setTime(0, 0, 0);
+        $end_dt_obj->setTime(23, 59, 59);
 
         $startDateTime = $start_dt_obj->format('Y-m-d H:i:s');
         $endDateTime = $end_dt_obj->format('Y-m-d H:i:s');
 
     } catch (Exception $e) {
-         $response['success'] = false; // Set success to false on date processing error
-         $response['message'] = 'Error processing date range: ' . $e->getMessage();
-         error_log('Date Processing Error (fetch_sales_summary.php): ' . $e->getMessage());
-         echo json_encode($response);
-         exit();
+        $response['success'] = false;
+        $response['message'] = 'Error processing date range: ' . $e->getMessage();
+        error_log('Date Processing Error (fetch_sales_summary.php): ' . $e->getMessage());
+        echo json_encode($response);
+        exit();
     }
 
-
-    // Set up parameters for binding and the WHERE clause for date filtering
+    $filterClauses[] = "t.transaction_time BETWEEN ? AND ?";
     $bindParams[] = $startDateTime;
+    $bindParamTypes .= "s";
     $bindParams[] = $endDateTime;
-    $bindParamTypes = "ss"; // Both parameters are strings
+    $bindParamTypes .= "s";
 
-    // Use the BETWEEN clause for date filtering
-    $dateWhereClause = "WHERE transaction_time BETWEEN ? AND ?";
+    error_log("DEBUG: Sales Summary Dates (Used in Query) - Start: " . $startDateTime . ", End: " . $endDateTime);
+} else {
+    error_log("DEBUG: No dates provided. Fetching sales summary for All Time.");
+}
 
-    // --- Debug Log for Dates Used in Query ---
-    error_log("DEBUG: Fetch Sales Summary Dates (Used in Query) - Start: " . $startDateTime . ", End: " . $endDateTime);
-    // --- End Debug Log for Dates Used in Query ---
-    // After the date filtering code (around line 120), add category filtering:
-$category = filter_input(INPUT_GET, 'category', FILTER_UNSAFE_RAW);
-$categoryWhereClause = "";
-$categoryJoinClause = "";
-
-if ($category && $category !== 'all') {
-    // Validate category against our known categories
+// Category filtering
+if ($category && strtolower($category) !== 'all') {
     $validCategories = ['veg', 'non-veg', 'beverage', 'snack', 'dessert'];
-    if (!in_array(strtolower($category), $validCategories)) {
+    // Convert to proper case for consistency with database (e.g., 'Snack', 'Non-Veg')
+    $formattedCategory = ucfirst(strtolower($category)); 
+    if (!in_array(strtolower($category), $validCategories)) { // Validate input lowercased
         $response['success'] = false;
         $response['message'] = 'Invalid category provided.';
         echo json_encode($response);
         exit();
     }
 
-    // Add join and where clause for category filtering
-    $categoryJoinClause = " JOIN transaction_item ti ON t.txn_id = ti.txn_id JOIN food f ON ti.food_id = f.food_id";
-    $categoryWhereClause = " AND f.category = ?";
+    // Add join for transaction_item and food tables
+    $joinClauses[] = "JOIN transaction_item ti ON t.txn_id = ti.txn_id";
+    $joinClauses[] = "JOIN food f ON ti.food_id = f.food_id";
     
-    // Add category parameter to bind params
-    $bindParams[] = ucfirst($category); // Convert to proper case (e.g., 'non-veg' -> 'Non-Veg')
-    $bindParamTypes .= "s"; // Add string type for category
-}
-
-// Then modify all your SQL queries to include the category filtering:
-// Example for Total Revenue:
-$sqlTotalRevenue = "SELECT COALESCE(SUM(total_amount), 0) AS total_revenue 
-                   FROM transaction t" . 
-                   $categoryJoinClause . 
-                   (!empty($dateWhereClause) ? $dateWhereClause : " WHERE 1=1") . 
-                   $categoryWhereClause;
+    // Add category filter clause
+    $filterClauses[] = "f.category = ?";
+    $bindParams[] = $formattedCategory; // Bind the formatted category
+    $bindParamTypes .= "s";
+    error_log("DEBUG: Category filter applied: " . $formattedCategory);
 } else {
-     // If dates are NOT provided (or are empty strings), fetch for all time
-     error_log("DEBUG: No dates provided from frontend. Fetching sales summary for All Time.");
-     // No where clause needed for all time, bindParams and bindParamTypes remain empty
-     // The queries will select all rows
+    error_log("DEBUG: No specific category filter applied.");
 }
 
+// Combine all filter clauses
+$whereClause = "";
+if (!empty($filterClauses)) {
+    $whereClause = " WHERE " . implode(" AND ", $filterClauses);
+}
 
-// --- Fetch Sales Summary Data (Adjusted to use dynamic WHERE clause and binding) ---
+// Combine all join clauses
+$joinString = implode(" ", $joinClauses);
+
+
+// --- Fetch Sales Summary Data ---
 
 // Query for Total Revenue
-$sqlTotalRevenue = "SELECT COALESCE(SUM(total_amount), 0) AS total_revenue FROM transaction " . $dateWhereClause; // Append WHERE clause, use COALESCE for 0 if no rows
+// For revenue, we need to consider total_amount from transaction table.
+// If category is filtered, we need to join through transaction_item and food.
+$sqlTotalRevenue = "
+    SELECT COALESCE(SUM(t.total_amount), 0) AS total_revenue
+    FROM transaction t
+    " . $joinString . "
+    " . $whereClause;
+
 error_log("DB Info (fetch_sales_summary.php): Preparing Total Revenue query: " . $sqlTotalRevenue);
 if ($stmt = mysqli_prepare($link, $sqlTotalRevenue)) {
-     error_log("DB Info (fetch_sales_summary.php): Total Revenue query prepared successfully.");
-     // Bind parameters only if the date clause is used
     if (!empty($bindParams)) {
-         error_log("DB Info (fetch_sales_summary.php): Binding parameters for Total Revenue query: " . implode(', ', $bindParams));
-         // Use call_user_func_array to bind parameters dynamically (PHP 5.6+ recommended)
-         // array_merge requires PHP 5.6+ for the unpacking operator (...) or you can use older methods
-         mysqli_stmt_bind_param($stmt, $bindParamTypes, ...$bindParams); // Requires PHP 5.6+ for ...$bindParams
-         // For older PHP versions:
-         // call_user_func_array('mysqli_stmt_bind_param', array_merge([$stmt, $bindParamTypes], $bindParams));
+        mysqli_stmt_bind_param($stmt, $bindParamTypes, ...$bindParams);
     }
-
-    error_log("DB Info (fetch_sales_summary.php): Executing Total Revenue query.");
     if (mysqli_stmt_execute($stmt)) {
-        error_log("DB Info (fetch_sales_summary.php): Total Revenue query executed successfully.");
         $result = mysqli_stmt_get_result($stmt);
-        if ($result) {
-             error_log("DB Info (fetch_sales_summary.php): Total Revenue get_result successful.");
-             if ($row = mysqli_fetch_assoc($result)) { // Check if result is valid before fetching
-                 $totalRevenue = $row['total_revenue']; // Use the fetched value (COALESCE handles null to 0)
-                 error_log("DEBUG: Total Revenue Raw Result: " . print_r($row, true)); // Log the fetched row data
-             } else {
-                  // This happens if query executed but returned no rows (e.g., COUNT(*) on empty table)
-                  // COALESCE should handle this, so totalRevenue remains 0
-                  error_log('DB Info (fetch_sales_summary.php): Total Revenue fetch assoc returned no rows.');
-             }
-             mysqli_free_result($result); // Free result set memory if valid
-        } else {
-             error_log('DB Error (fetch_sales_summary.php): Total Revenue get_result failed: ' . mysqli_stmt_error($stmt));
-             $response['success'] = false; // Set success to false on get_result failure
-             $response['message'] = 'Database error getting total revenue result: ' . mysqli_stmt_error($stmt);
+        if ($result && $row = mysqli_fetch_assoc($result)) {
+            $totalRevenue = $row['total_revenue'];
         }
+        if ($result) mysqli_free_result($result);
     } else {
         error_log('DB Error (fetch_sales_summary.php): Total Revenue execute: ' . mysqli_stmt_error($stmt));
-         $response['success'] = false; // Set success to false on query execution failure
-         $response['message'] = 'Database error fetching total revenue: ' . mysqli_stmt_error($stmt); // Add error detail
+        $response['success'] = false;
+        $response['message'] = 'Database error fetching total revenue: ' . mysqli_stmt_error($stmt);
     }
     mysqli_stmt_close($stmt);
 } else {
     error_log('DB Error (fetch_sales_summary.php): Total Revenue prepare: ' . mysqli_error($link));
-     $response['success'] = false; // Set success to false on query preparation failure
-     $response['message'] = 'Database error preparing total revenue query: ' . mysqli_error($link); // Add error detail
+    $response['success'] = false;
+    $response['message'] = 'Database error preparing total revenue query: ' . mysqli_error($link);
 }
 
-// --- Query for Total Items Sold ---
-// Join transaction_item with transaction to filter by transaction_time
-$sqlTotalItemsSold = "SELECT COALESCE(SUM(ti.quantity), 0) AS total_items_sold FROM transaction_item ti JOIN transaction t ON ti.txn_id = t.txn_id " . $dateWhereClause; // Append WHERE clause
+
+// Query for Total Items Sold
+// This always needs to join with transaction_item and food to sum quantities and filter by category.
+$sqlTotalItemsSold = "
+    SELECT COALESCE(SUM(ti.quantity), 0) AS total_items_sold
+    FROM transaction t
+    JOIN transaction_item ti ON t.txn_id = ti.txn_id
+    " . (empty($joinClauses) ? "" : "JOIN food f ON ti.food_id = f.food_id") . "
+    " . $whereClause;
+
+// Special handling for bindParams and bindParamTypes for items_sold if category is not selected for other queries.
+// If category is not selected, the $joinClauses array would be empty.
+// We only want to add the food join IF the category is selected.
+// However, to sum items sold, we always need 'ti'.
+$itemsSoldBindParams = [];
+$itemsSoldBindParamTypes = "";
+$itemsSoldFilterClauses = ["t.status = 'success'"];
+
+if ($startDate !== null && $endDate !== null && $startDate !== '' && $endDate !== '') {
+    $itemsSoldFilterClauses[] = "t.transaction_time BETWEEN ? AND ?";
+    $itemsSoldBindParams[] = $startDateTime;
+    $itemsSoldBindParamTypes .= "s";
+    $itemsSoldBindParams[] = $endDateTime;
+    $itemsSoldBindParamTypes .= "s";
+}
+if ($category && strtolower($category) !== 'all') {
+    $itemsSoldFilterClauses[] = "f.category = ?";
+    $itemsSoldBindParams[] = $formattedCategory;
+    $itemsSoldBindParamTypes .= "s";
+}
+
+$itemsSoldWhereClause = " WHERE " . implode(" AND ", $itemsSoldFilterClauses);
+$itemsSoldJoinFood = ($category && strtolower($category) !== 'all') ? " JOIN food f ON ti.food_id = f.food_id" : "";
+
+
+$sqlTotalItemsSold = "
+    SELECT COALESCE(SUM(ti.quantity), 0) AS total_items_sold
+    FROM transaction t
+    JOIN transaction_item ti ON t.txn_id = t.txn_id
+    " . $itemsSoldJoinFood . "
+    " . $itemsSoldWhereClause;
+
+
 error_log("DB Info (fetch_sales_summary.php): Preparing Total Items Sold query: " . $sqlTotalItemsSold);
 if ($stmt = mysqli_prepare($link, $sqlTotalItemsSold)) {
-     error_log("DB Info (fetch_sales_summary.php): Total Items Sold query prepared successfully.");
-    // Bind parameters only if the date clause is used
-    if (!empty($bindParams)) {
-         error_log("DB Info (fetch_sales_summary.php): Binding parameters for Total Items Sold query: " . implode(', ', $bindParams));
-        mysqli_stmt_bind_param($stmt, $bindParamTypes, ...$bindParams); // Requires PHP 5.6+
+    if (!empty($itemsSoldBindParams)) {
+        mysqli_stmt_bind_param($stmt, $itemsSoldBindParamTypes, ...$itemsSoldBindParams);
     }
-    error_log("DB Info (fetch_sales_summary.php): Executing Total Items Sold query.");
     if (mysqli_stmt_execute($stmt)) {
-         error_log("DB Info (fetch_sales_summary.php): Total Items Sold query executed successfully.");
         $result = mysqli_stmt_get_result($stmt);
-        if ($result) {
-             error_log("DB Info (fetch_sales_summary.php): Total Items Sold get_result successful.");
-            if ($row = mysqli_fetch_assoc($result)) { // Check if result is valid
-                $totalItemsSold = $row['total_items_sold'];
-                error_log("DEBUG: Total Items Sold Raw Result: " . print_r($row, true));
-            } else {
-                 error_log('DB Info (fetch_sales_summary.php): Total Items Sold fetch assoc returned no rows.');
-            }
-            if ($result) mysqli_free_result($result);
-        } else {
-             error_log('DB Error (fetch_sales_summary.php): Total Items Sold get_result failed: ' . mysqli_stmt_error($stmt));
-             $response['success'] = false;
-             $response['message'] = 'Database error getting total items sold result: ' . mysqli_stmt_error($stmt);
+        if ($result && $row = mysqli_fetch_assoc($result)) {
+            $totalItemsSold = $row['total_items_sold'];
         }
+        if ($result) mysqli_free_result($result);
     } else {
         error_log('DB Error (fetch_sales_summary.php): Total Items Sold execute: ' . mysqli_stmt_error($stmt));
         $response['success'] = false;
@@ -257,34 +259,25 @@ if ($stmt = mysqli_prepare($link, $sqlTotalItemsSold)) {
 }
 
 
-// --- Query for Total Transactions ---
-$sqlTotalTransactions = "SELECT COALESCE(COUNT(*), 0) AS total_transactions FROM transaction " . $dateWhereClause; // Append WHERE clause
+// Query for Total Transactions
+// This query implicitly needs to consider joins if category is filtered.
+$sqlTotalTransactions = "
+    SELECT COALESCE(COUNT(DISTINCT t.txn_id), 0) AS total_transactions
+    FROM transaction t
+    " . $joinString . "
+    " . $whereClause;
+
 error_log("DB Info (fetch_sales_summary.php): Preparing Total Transactions query: " . $sqlTotalTransactions);
 if ($stmt = mysqli_prepare($link, $sqlTotalTransactions)) {
-     error_log("DB Info (fetch_sales_summary.php): Total Transactions query prepared successfully.");
-    // Bind parameters only if the date clause is used
     if (!empty($bindParams)) {
-         error_log("DB Info (fetch_sales_summary.php): Binding parameters for Total Transactions query: " . implode(', ', $bindParams));
         mysqli_stmt_bind_param($stmt, $bindParamTypes, ...$bindParams);
     }
-    error_log("DB Info (fetch_sales_summary.php): Executing Total Transactions query.");
     if (mysqli_stmt_execute($stmt)) {
-         error_log("DB Info (fetch_sales_summary.php): Total Transactions query executed successfully.");
         $result = mysqli_stmt_get_result($stmt);
-        if ($result) {
-             error_log("DB Info (fetch_sales_summary.php): Total Transactions get_result successful.");
-            if ($row = mysqli_fetch_assoc($result)) { // Check if result is valid
-                $totalTransactions = $row['total_transactions'];
-                error_log("DEBUG: Total Transactions Raw Result: " . print_r($row, true));
-            } else {
-                 error_log('DB Info (fetch_sales_summary.php): Total Transactions fetch assoc returned no rows.');
-            }
-            if ($result) mysqli_free_result($result);
-        } else {
-             error_log('DB Error (fetch_sales_summary.php): Total Transactions get_result failed: ' . mysqli_stmt_error($stmt));
-             $response['success'] = false;
-             $response['message'] = 'Database error getting total transactions result: ' . mysqli_stmt_error($stmt);
+        if ($result && $row = mysqli_fetch_assoc($result)) {
+            $totalTransactions = $row['total_transactions'];
         }
+        if ($result) mysqli_free_result($result);
     } else {
         error_log('DB Error (fetch_sales_summary.php): Total Transactions execute: ' . mysqli_stmt_error($stmt));
         $response['success'] = false;
@@ -297,40 +290,29 @@ if ($stmt = mysqli_prepare($link, $sqlTotalTransactions)) {
     $response['message'] = 'Database error preparing total transactions query.';
 }
 
-// --- Query for Total Customers (Unique Students who made a transaction) ---
-// Note: This counts unique student_ids within the transaction table for the period.
-// If a student makes multiple transactions in the period, they are counted once.
-$sqlTotalCustomers = "SELECT COALESCE(COUNT(DISTINCT student_id), 0) AS total_customers FROM transaction " . $dateWhereClause; // Append WHERE clause
+// Query for Total Customers (Unique Students who made a transaction)
+// This also needs to consider joins if category is filtered.
+$sqlTotalCustomers = "
+    SELECT COALESCE(COUNT(DISTINCT t.student_id), 0) AS total_customers
+    FROM transaction t
+    " . $joinString . "
+    " . $whereClause;
+
 error_log("DB Info (fetch_sales_summary.php): Preparing Total Customers query: " . $sqlTotalCustomers);
 if ($stmt = mysqli_prepare($link, $sqlTotalCustomers)) {
-     error_log("DB Info (fetch_sales_summary.php): Total Customers query prepared successfully.");
-    // Bind parameters only if the date clause is used
     if (!empty($bindParams)) {
-         error_log("DB Info (fetch_sales_summary.php): Binding parameters for Total Customers query: " . implode(', ', $bindParams));
         mysqli_stmt_bind_param($stmt, $bindParamTypes, ...$bindParams);
     }
-    error_log("DB Info (fetch_sales_summary.php): Executing Total Customers query.");
     if (mysqli_stmt_execute($stmt)) {
-         error_log("DB Info (fetch_sales_summary.php): Total Customers query executed successfully.");
         $result = mysqli_stmt_get_result($stmt);
-        if ($result) {
-             error_log("DB Info (fetch_sales_summary.php): Total Customers get_result successful.");
-            if ($row = mysqli_fetch_assoc($result)) { // Check if result is valid
-                $totalCustomers = $row['total_customers'];
-                error_log("DEBUG: Total Customers Raw Result: " . print_r($row, true));
-            } else {
-                 error_log('DB Info (fetch_sales_summary.php): Total Customers fetch assoc returned no rows.');
-            }
-            if ($result) mysqli_free_result($result);
-        } else {
-             error_log('DB Error (fetch_sales_summary.php): Total Customers get_result failed: ' . mysqli_stmt_error($stmt));
-             $response['success'] = false;
-             $response['message'] = 'Database error getting total customers result: ' . mysqli_stmt_error($stmt);
+        if ($result && $row = mysqli_fetch_assoc($result)) {
+            $totalCustomers = $row['total_customers'];
         }
+        if ($result) mysqli_free_result($result);
     } else {
         error_log('DB Error (fetch_sales_summary.php): Total Customers execute: ' . mysqli_stmt_error($stmt));
         $response['success'] = false;
-        $response['message'] = 'Database error fetching total customers: ' . mysqli_stmt_error($stmt);
+        $response['message'] = 'Database error getting total customers result: ' . mysqli_stmt_error($stmt);
     }
     mysqli_stmt_close($stmt);
 } else {
@@ -341,40 +323,21 @@ if ($stmt = mysqli_prepare($link, $sqlTotalCustomers)) {
 
 
 // --- Final Response ---
-// If $response['success'] is still true at this point, it means ALL queries prepared and executed successfully.
-// If any query failed during preparation or execution, $response['success'] would have been set to false and the message updated.
 if ($response['success'] === true) {
-     // Populate the summary data into the response structure ONLY if all queries succeeded
-     $response['summary'] = [
-         'total_revenue' => $totalRevenue,
-         'total_items_sold' => $totalItemsSold,
-         'total_transactions' => $totalTransactions,
-         'total_customers' => $totalCustomers
-     ];
-     // The success message is already set to 'Sales summary fetched successfully.' by default
-     // or updated based on whether dates were provided.
-      $response['message'] = ($startDate !== null && $endDate !== null) ? 'Sales summary fetched successfully for date range.' : 'Sales summary for all time fetched successfully.';
-
+    $response['summary'] = [
+        'total_revenue' => $totalRevenue,
+        'total_items_sold' => $totalItemsSold,
+        'total_transactions' => $totalTransactions,
+        'total_customers' => $totalCustomers
+    ];
+    $response['message'] = 'Sales summary fetched successfully.';
 } else {
-     // If $response['success'] is false, keep the error message and the default 0s in summary.
-     // The message was set during the failed query block.
-     if (!isset($response['message']) || $response['message'] === 'Error fetching sales summary.') {
-          $response['message'] = 'An error occurred while fetching sales data.'; // Fallback message if no specific error was set
-     }
-     // Summary remains 0s as initialized
+    if (!isset($response['message']) || $response['message'] === 'Error fetching sales summary.') {
+        $response['message'] = 'An error occurred while fetching sales data.';
+    }
 }
 
-// --- Log Final Response ---
-error_log("DEBUG: Final Response (fetch_sales_summary.php): " . json_encode($response)); // Log the final JSON response
-// --- End Log Final Response ---
-
-
-// Close the database connection (Already handled at the end if needed)
-// It's often safer to omit mysqli_close and let PHP close automatically,
-// especially in short scripts like this.
-
-// Send the JSON response back to the frontend
+error_log("DEBUG: Final Response (fetch_sales_summary.php): " . json_encode($response));
 echo json_encode($response);
 
-// Note: No closing PHP tag here is intentional. This prevents accidental whitespace.
 ?>

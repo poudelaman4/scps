@@ -48,10 +48,10 @@ $response = [
 ];
 
 // Get date range and category parameters from the GET request
-// Note: Category filter is currently not used on the dashboard, but kept for sales.php
 $startDate = filter_input(INPUT_GET, 'startDate', FILTER_UNSAFE_RAW);
 $endDate = filter_input(INPUT_GET, 'endDate', FILTER_UNSAFE_RAW);
-$category = filter_input(INPUT_GET, 'category', FILTER_SANITIZE_STRING); // Optional category filter
+$category = filter_input(INPUT_GET, 'category', FILTER_UNSAFE_RAW); // Use UNSAFE_RAW for category as well for consistency then validate
+
 
 $startDateTime = null;
 $endDateTime = null;
@@ -65,15 +65,14 @@ $filterClauses[] = "t.status = 'success'";
 
 // Determine date range and add to filter clauses
 if ($startDate !== null && $endDate !== null && $startDate !== '' && $endDate !== '') {
-     // Validate date format
     $start_timestamp = strtotime($startDate);
     $end_timestamp = strtotime($endDate);
 
     if (!$start_timestamp || !$end_timestamp) {
-         $response['message'] = 'Invalid date format provided.';
-         error_log('Validation Error (fetch_top_selling_items.php): Invalid date format received: Start=' . $startDate . ', End=' . $endDate);
-         echo json_encode($response);
-         exit();
+        $response['message'] = 'Invalid date format provided.';
+        error_log('Validation Error (fetch_top_selling_items.php): Invalid date format received: Start=' . $startDate . ', End=' . $endDate);
+        echo json_encode($response);
+        exit();
     }
 
     // Add time component for inclusive range
@@ -86,10 +85,10 @@ if ($startDate !== null && $endDate !== null && $startDate !== '' && $endDate !=
         $startDateTime = $start_dt_obj->format('Y-m-d H:i:s');
         $endDateTime = $end_dt_obj->format('Y-m-d H:i:s');
     } catch (Exception $e) {
-         $response['message'] = 'Error processing date range: ' . $e->getMessage();
-         error_log('Date Processing Error (fetch_top_selling_items.php): ' . $e->getMessage());
-         echo json_encode($response);
-         exit();
+        $response['message'] = 'Error processing date range: ' . $e->getMessage();
+        error_log('Date Processing Error (fetch_top_selling_items.php): ' . $e->getMessage());
+        echo json_encode($response);
+        exit();
     }
 
     // Add date filter to clauses
@@ -102,18 +101,37 @@ if ($startDate !== null && $endDate !== null && $startDate !== '' && $endDate !=
     error_log("DEBUG: Fetch Top Items Dates (Used in Query) - Start: " . $startDateTime . ", End: " . $endDateTime);
 
 } else {
-     // If no dates, the status filter is the only one initially
-     error_log("DEBUG: No dates provided for top items. Fetching for All Time.");
+    error_log("DEBUG: No dates provided for top items. Fetching for All Time.");
 }
 
 // Determine category filter and add to filter clauses
+// DEBUG: Log the raw category received from the frontend
+error_log("DEBUG: fetch_top_selling_items.php - Raw category received: '" . ($category === null ? 'NULL' : $category) . "'");
+
 if ($category !== null && $category !== '' && strtolower($category) !== 'all') {
-    $filterClauses[] = "f.category = ?";
-    $bindParams[] = $category;
+    $validCategories = ['veg', 'non-veg', 'beverage', 'snack', 'dessert'];
+    // Convert to proper case for consistency with database (e.g., 'Snack', 'Non-Veg')
+    // We will now bind the lowercase category and use LOWER() in the SQL for case-insensitivity
+    $lowerCaseCategory = strtolower($category); 
+    
+    // DEBUG: Log the lowercase category before validation
+    error_log("DEBUG: fetch_top_selling_items.php - Lowercase category for validation: '" . $lowerCaseCategory . "'");
+
+    if (!in_array($lowerCaseCategory, $validCategories)) { // Validate input lowercased
+        $response['success'] = false;
+        $response['message'] = 'Invalid category provided.';
+        error_log('Validation Error (fetch_top_selling_items.php): Invalid category received: ' . $category . ' (Lowercase: ' . $lowerCaseCategory . ')'); // Log this specific error
+        echo json_encode($response);
+        exit(); // <-- This exit is the concern if the category is invalid
+    }
+
+    // Use LOWER() in SQL for case-insensitive comparison
+    $filterClauses[] = "LOWER(f.category) = ?";
+    $bindParams[] = $lowerCaseCategory; // Bind the lowercase category
     $bindParamTypes .= "s";
-     error_log("DEBUG: Category filter applied: " . $category);
+    error_log("DEBUG: Category filter applied (lowercase): " . $lowerCaseCategory);
 } else {
-     error_log("DEBUG: No category filter applied.");
+    error_log("DEBUG: No category filter applied (category is null, empty, or 'all').");
 }
 
 // Combine all filter clauses with AND, starting with WHERE if there are clauses
@@ -132,61 +150,46 @@ $sqlTopItems = "
         f.name,
         f.image_path,
         f.category,
-        COALESCE(SUM(ti.quantity * ti.unit_price), 0) AS total_revenue, -- CORRECTED: Calculate revenue per item
-        COALESCE(SUM(ti.quantity), 0) AS total_quantity_sold -- Also fetch total quantity sold
+        COALESCE(SUM(ti.quantity * ti.unit_price), 0) AS total_revenue,
+        COALESCE(SUM(ti.quantity), 0) AS total_quantity_sold
     FROM
         transaction_item ti
     JOIN
         transaction t ON ti.txn_id = t.txn_id
     JOIN
         food f ON ti.food_id = f.food_id
-    " . $whereClause . " -- Use the combined WHERE clause
+    " . $whereClause . "
     GROUP BY
-        f.food_id, f.name, f.image_path, f.category -- Group by item details
+        f.food_id, f.name, f.image_path, f.category
     ORDER BY
-        total_revenue DESC, total_quantity_sold DESC -- Order by revenue, then quantity
-    LIMIT 10"; // Limit to top 10 items
+        total_revenue DESC, total_quantity_sold DESC
+    LIMIT 10";
 
 
 error_log("DB Info (fetch_top_selling_items.php): Preparing Top Items query: " . $sqlTopItems);
 
 if ($stmt = mysqli_prepare($link, $sqlTopItems)) {
-     error_log("DB Info (fetch_top_selling_items.php): Top Items query prepared successfully.");
+    $types = $bindParamTypes; // Use the dynamically built type string
 
-     // --- Binding using the unpacking operator (...) ---
-     // The types string needs to match the number and types of parameters in $bindParams
-     // If no date or category filter, $bindParamTypes will be empty.
-     // If date filter, $bindParamTypes will be 'ss'.
-     // If category filter, $bindParamTypes will be 's'.
-     // If both, $bindParamTypes will be 'sss'.
-     $types = $bindParamTypes; // Use the dynamically built type string
-
-     // Bind parameters using the unpacking operator (...) - Requires PHP 5.6+
-     // This correctly passes the elements of the $bindParams array as separate arguments by value
-     if (!empty($bindParams)) {
-          // Use call_user_func_array for compatibility with older PHP versions if needed
-          mysqli_stmt_bind_param($stmt, $types, ...$bindParams);
-          // For older PHP versions:
-          // call_user_func_array('mysqli_stmt_bind_param', array_merge([$stmt, $types], $bindParams));
-     }
-     // If $bindParams is empty, no binding is needed here
-
+    if (!empty($bindParams)) {
+        mysqli_stmt_bind_param($stmt, $types, ...$bindParams);
+        // Log the bound parameters for debugging
+        error_log("DEBUG: Top Items Bound Parameters: " . implode(', ', $bindParams));
+    } else {
+        error_log("DEBUG: No parameters bound for Top Items query.");
+    }
 
     error_log("DB Info (fetch_top_selling_items.php): Executing Top Items query.");
     if (mysqli_stmt_execute($stmt)) {
-        error_log("DB Info (fetch_top_selling_items.php): Top Items query executed successfully.");
         $result = mysqli_stmt_get_result($stmt);
         if ($result) {
-             error_log("DB Info (fetch_top_selling_items.php): Top Items get_result successful.");
             $topItemsData = [];
             while ($row = mysqli_fetch_assoc($result)) {
-                // Ensure numeric values are treated as numbers
                 $row['total_revenue'] = (float)$row['total_revenue'];
                 $row['total_quantity_sold'] = (int)$row['total_quantity_sold'];
                 $topItemsData[] = $row;
             }
-            error_log("DEBUG: Top Items Raw Result Count: " . count($topItemsData)); // Log number of rows fetched
-            // error_log("DEBUG: Top Items Raw Data: " . print_r($topItemsData, true)); // Log actual data (can be verbose)
+            error_log("DEBUG: Top Items Raw Result Count: " . count($topItemsData));
 
             mysqli_free_result($result);
 
@@ -195,29 +198,24 @@ if ($stmt = mysqli_prepare($link, $sqlTopItems)) {
             $response['top_items'] = $topItemsData;
 
         } else {
-             error_log('DB Error (fetch_top_selling_items.php): Top Items get_result failed: ' . mysqli_stmt_error($stmt));
-             $response['message'] = 'Database error getting top items result: ' . mysqli_stmt_error($stmt);
-             $response['success'] = false; // Set success to false on failure
+            error_log('DB Error (fetch_top_selling_items.php): Top Items get_result failed: ' . mysqli_stmt_error($stmt));
+            $response['message'] = 'Database error getting top items result: ' . mysqli_stmt_error($stmt);
+            $response['success'] = false;
         }
     } else {
         error_log('DB Error (fetch_top_selling_items.php): Top Items execute: ' . mysqli_stmt_error($stmt));
-         $response['message'] = 'Database error fetching top items: ' . mysqli_stmt_error($stmt);
-         $response['success'] = false; // Set success to false on failure
+        $response['message'] = 'Database error fetching top items: ' . mysqli_stmt_error($stmt);
+        $response['success'] = false;
     }
     mysqli_stmt_close($stmt);
 } else {
     error_log('DB Error (fetch_top_selling_items.php): Top Items prepare: ' . mysqli_error($link));
-     $response['message'] = 'Database error preparing top items query: ' . mysqli_error($link);
-     $response['success'] = false; // Set success to false on failure
+    $response['message'] = 'Database error preparing top items query: ' . mysqli_error($link);
+    $response['success'] = false;
 }
 
 
-// Close the database connection (optional, PHP does this at end of script)
-// if (isset($link)) { mysqli_close($link); } // Use $link
-
-// Send the JSON response back to the frontend
 error_log("DEBUG: Final Response (fetch_top_selling_items.php): " . json_encode($response));
 echo json_encode($response);
 
-// Note: No closing PHP tag here is intentional.
 ?>
