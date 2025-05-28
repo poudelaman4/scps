@@ -20,7 +20,7 @@ require_once '../includes/db_connection.php'; // Make sure this path is correct 
 
 // Get admin username and role from session for header (optional, for header display)
 $admin_username = $_SESSION['admin_username'] ?? 'Admin';
-$admin_role = $_SESSION['admin_role'] ?? 'N/A';
+$admin_role = $_SESSION['admin_role'] ?? 'N/A'; // Get the logged-in admin's role
 
 // Include necessary packages (like CSS, Flowbite, Tailwind) - Path from admin/ UP to root (../) then includes/
 include '../includes/packages.php'; // Ensure this path is correct
@@ -184,12 +184,7 @@ include '../includes/admin_header.php';
             font-size: 0.75rem;
             font-weight: 500;
         }
-        
-        /* Fix for dark text in modal */
-        .modal-content-wrapper .text-gray-900 {
-            color: #111827 !important; /* Force dark text in modal */
-        }
-        
+
         /* Table status badges */
         .status-badge {
             padding: 0.25rem 0.5rem;
@@ -204,6 +199,52 @@ include '../includes/admin_header.php';
         .status-badge.pending {
             background-color: #fffbeb;
             color: #d97706;
+        }
+
+        /* Fix for dark text in modal */
+        .modal-content-wrapper .text-gray-900 {
+            color: #111827 !important; /* Force dark text in modal */
+        }
+
+        /* Styles for new action buttons */
+        .action-buttons-group {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 20px;
+            flex-wrap: wrap; /* Allow wrapping on smaller screens */
+        }
+        .action-buttons-group button {
+            padding: 8px 16px;
+            border-radius: 6px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: background-color 0.2s, transform 0.1s;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .action-buttons-group button:hover:not(:disabled) {
+            transform: translateY(-1px);
+        }
+        .action-buttons-group button:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+        }
+        .export-btn {
+            background-color: #10b981; /* Green */
+            color: white;
+            border: none;
+        }
+        .export-btn:hover {
+            background-color: #059669; /* Darker green */
+        }
+        .delete-selected-btn {
+            background-color: #ef4444; /* Red */
+            color: white;
+            border: none;
+        }
+        .delete-selected-btn:hover {
+            background-color: #dc2626; /* Darker red */
         }
     </style>
 </head>
@@ -225,11 +266,31 @@ include '../includes/admin_header.php';
             <button id="resetFiltersBtn" class="bg-gray-300 text-gray-800 px-4 py-2 rounded-md hover:bg-gray-400 transition-colors">Reset Filters</button>
         </div>
 
+        <div class="action-buttons-group">
+            <button id="exportPdfBtn" class="export-btn">
+                <svg class="w-5 h-5 mr-1" fill="currentColor" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg"><path fill-rule="evenodd" d="M5.5 17a4.5 4.5 0 01-1.44-8.765 4.5 4.5 0 018.302-3.046 3.5 3.5 0 01.844 6.705L15 10l-2 3h2l2-3h-2.5a4.5 4.5 0 01-4.5 4.5z" clip-rule="evenodd"></path></svg>
+                Export PDF
+            </button>
+            <button id="exportExcelBtn" class="export-btn">
+                <svg class="w-5 h-5 mr-1" fill="currentColor" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg"><path fill-rule="evenodd" d="M5.5 17a4.5 4.5 0 01-1.44-8.765 4.5 4.5 0 018.302-3.046 3.5 3.5 0 01.844 6.705L15 10l-2 3h2l2-3h-2.5a4.5 4.5 0 01-4.5 4.5z" clip-rule="evenodd"></path></svg>
+                Export Excel
+            </button>
+            <?php if ($admin_role === 'super_administrator' || $admin_role === 'administrator'): // Changed condition ?>
+            <button id="deleteSelectedBtn" class="delete-selected-btn" disabled>
+                <svg class="w-5 h-5 mr-1" fill="currentColor" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg"><path fill-rule="evenodd" d="M9 2a1 1 0 00-.894.553L7.382 4H4a1 1 0 000 2v10a2 2 0 002 2h8a2 2 0 002-2V6a1 1 0 100-2h-3.382l-.724-1.447A1 1 0 0011 2H9zM7 8a1 1 0 011-1h4a1 1 0 110 2H8a1 1 0 01-1-1zm-2 4a1 1 0 011-1h4a1 1 0 110 2H6a1 1 0 01-1-1z" clip-rule="evenodd"></path></svg>
+                Delete Selected
+            </button>
+            <?php endif; ?>
+        </div>
+
 
         <div class="table-container">
             <table class="min-w-full divide-y divide-gray-200">
                 <thead>
                     <tr>
+                        <th>
+                            <input type="checkbox" id="selectAllTransactions" class="h-4 w-4 text-indigo-600 border-gray-300 rounded">
+                        </th>
                         <th>Transaction ID</th>
                         <th>Student Name</th>
                         <th>NFC ID</th>
@@ -241,7 +302,7 @@ include '../includes/admin_header.php';
                 </thead>
                 <tbody id="transactionTableBody" class="bg-white divide-y divide-gray-200">
                     <tr>
-                        <td colspan="7" class="text-center py-4 text-gray-500">Loading transactions...</td>
+                        <td colspan="8" class="text-center py-4 text-gray-500">Loading transactions...</td>
                     </tr>
                 </tbody>
             </table>
@@ -297,7 +358,7 @@ include '../includes/admin_header.php';
         const startDateInput = document.getElementById('startDate');
         const endDateInput = document.getElementById('endDate');
         const applyFiltersBtn = document.getElementById('applyFiltersBtn');
-        const resetFiltersBtn = document = document.getElementById('resetFiltersBtn');
+        const resetFiltersBtn = document.getElementById('resetFiltersBtn');
 
         const prevPageBtn = document.getElementById('prevPageBtn');
         const nextPageBtn = document.getElementById('nextPageBtn');
@@ -313,16 +374,30 @@ include '../includes/admin_header.php';
         const modalStatus = document.getElementById('modalStatus');
         const modalItems = document.getElementById('modalItems');
 
+        // New action buttons
+        const exportPdfBtn = document.getElementById('exportPdfBtn');
+        const exportExcelBtn = document.getElementById('exportExcelBtn');
+        const deleteSelectedBtn = document.getElementById('deleteSelectedBtn'); // This button might not exist if not super_admin
+
+        // Checkbox elements
+        const selectAllTransactionsCheckbox = document.getElementById('selectAllTransactions');
+
+
         // Pagination variables
         let currentPage = 1;
         const itemsPerPage = 20; // Set to 20 elements per page
         let totalPages = 1;
         let totalTransactions = 0;
 
+        // PHP variable for admin role
+        const currentAdminRole = <?php echo json_encode($admin_role); ?>;
+
+
         // Function to fetch and display transactions
         async function fetchAndDisplayTransactions() {
-            transactionTableBody.innerHTML = '<tr><td colspan="7" class="text-center py-4 text-gray-500">Loading transactions...</td></tr>';
+            transactionTableBody.innerHTML = '<tr><td colspan="8" class="text-center py-4 text-gray-500">Loading transactions...</td></tr>'; // Updated colspan
             setPaginationButtonsState(true); // Disable buttons during fetch
+            uncheckAllTransactionCheckboxes(); // Uncheck checkboxes on new data load
 
             const searchTerm = searchInput.value.trim();
             const status = statusFilter.value;
@@ -348,14 +423,14 @@ include '../includes/admin_header.php';
                     totalPages = data.total_pages;
                     renderPaginationControls(data.current_page, data.total_pages, data.total_transactions);
                 } else {
-                    transactionTableBody.innerHTML = `<tr><td colspan="7" class="text-center py-4 text-red-500">${data.message || 'Failed to load transactions.'}</td></tr>`;
+                    transactionTableBody.innerHTML = `<tr><td colspan="8" class="text-center py-4 text-red-500">${data.message || 'Failed to load transactions.'}</td></tr>`; // Updated colspan
                     totalTransactions = 0;
                     totalPages = 1;
                     renderPaginationControls(1, 1, 0);
                 }
             } catch (error) {
                 console.error('Error fetching transactions:', error);
-                transactionTableBody.innerHTML = `<tr><td colspan="7" class="text-center py-4 text-red-500">Error loading transactions. Please try again.</td></tr>`;
+                transactionTableBody.innerHTML = `<tr><td colspan="8" class="text-center py-4 text-red-500">Error loading transactions. Please try again.</td></tr>`; // Updated colspan
                 totalTransactions = 0;
                 totalPages = 1;
                 renderPaginationControls(1, 1, 0);
@@ -366,7 +441,7 @@ include '../includes/admin_header.php';
 
         function renderTransactionTable(transactions) {
             if (transactions.length === 0) {
-                transactionTableBody.innerHTML = '<tr><td colspan="7" class="text-center py-4 text-gray-500">No transactions found.</td></tr>';
+                transactionTableBody.innerHTML = '<tr><td colspan="8" class="text-center py-4 text-gray-500">No transactions found.</td></tr>'; // Updated colspan
                 return;
             }
 
@@ -374,6 +449,9 @@ include '../includes/admin_header.php';
             transactions.forEach(txn => {
                 html += `
                     <tr data-txn-id="${txn.txn_id}">
+                        <td>
+                            <input type="checkbox" class="transaction-checkbox h-4 w-4 text-indigo-600 border-gray-300 rounded" data-txn-id="${txn.txn_id}">
+                        </td>
                         <td>${txn.txn_id}</td>
                         <td>${txn.student_name || 'N/A'}</td>
                         <td>${txn.nfc_id || 'N/A'}</td>
@@ -389,6 +467,7 @@ include '../includes/admin_header.php';
             });
             transactionTableBody.innerHTML = html;
             attachViewDetailsListeners();
+            attachCheckboxListeners(); // Attach listeners for new checkboxes
         }
 
         function renderPaginationControls(currentPage, totalPages, totalTransactions) {
@@ -614,9 +693,150 @@ include '../includes/admin_header.php';
             }, 3000); // Hide after 3 seconds
         }
 
+        // --- New Export and Bulk Delete Functions ---
+
+        function getSelectedTransactionIds() {
+            const checkboxes = document.querySelectorAll('.transaction-checkbox:checked');
+            const selectedIds = [];
+            checkboxes.forEach(checkbox => {
+                selectedIds.push(checkbox.dataset.txnId);
+            });
+            return selectedIds;
+        }
+
+        function updateDeleteSelectedButtonState() {
+            // Only update if the button exists (i.e., if currentAdminRole is super_administrator or administrator)
+            if (deleteSelectedBtn) {
+                const selectedCount = getSelectedTransactionIds().length;
+                deleteSelectedBtn.disabled = selectedCount === 0;
+            }
+        }
+
+        function uncheckAllTransactionCheckboxes() {
+            document.querySelectorAll('.transaction-checkbox').forEach(checkbox => {
+                checkbox.checked = false;
+            });
+            if (selectAllTransactionsCheckbox) {
+                selectAllTransactionsCheckbox.checked = false;
+            }
+            updateDeleteSelectedButtonState();
+        }
+
+        function attachCheckboxListeners() {
+            // Attach listener for individual transaction checkboxes
+            document.querySelectorAll('.transaction-checkbox').forEach(checkbox => {
+                checkbox.removeEventListener('change', updateDeleteSelectedButtonState); // Prevent multiple listeners
+                checkbox.addEventListener('change', updateDeleteSelectedButtonState);
+            });
+
+            // Attach listener for "Select All" checkbox
+            if (selectAllTransactionsCheckbox) {
+                selectAllTransactionsCheckbox.removeEventListener('change', handleSelectAllChange); // Prevent multiple listeners
+                selectAllTransactionsCheckbox.addEventListener('change', handleSelectAllChange);
+            }
+        }
+
+        function handleSelectAllChange() {
+            const isChecked = selectAllTransactionsCheckbox.checked;
+            document.querySelectorAll('.transaction-checkbox').forEach(checkbox => {
+                checkbox.checked = isChecked;
+            });
+            updateDeleteSelectedButtonState();
+        }
+
+        async function deleteSelectedTransactions() {
+            const selectedIds = getSelectedTransactionIds();
+            if (selectedIds.length === 0) {
+                displayMessageBox('No transactions selected for deletion.', 'warning');
+                return;
+            }
+
+            if (!confirm(`Are you sure you want to delete ${selectedIds.length} selected transaction(s)? This action cannot be undone.`)) {
+                return; // User cancelled
+            }
+
+            try {
+                // This will call the new backend script: admin/api/delete_transactions_bulk.php
+                const response = await fetch('api/delete_transactions_bulk.php', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ transaction_ids: selectedIds })
+                });
+
+                if (!response.ok) {
+                    throw new Error(`HTTP error! Status: ${response.status}`);
+                }
+
+                const result = await response.json();
+
+                if (result.success) {
+                    displayMessageBox(result.message || 'Selected transactions deleted successfully!', 'success');
+                    fetchAndDisplayTransactions(); // Refresh the list
+                } else {
+                    displayMessageBox(result.message || 'Failed to delete selected transactions.', 'error');
+                }
+            } catch (error) {
+                console.error('Error deleting selected transactions:', error);
+                displayMessageBox(`Network error: Could not delete selected transactions. ${error.message}`, 'error');
+            }
+        }
+
+        function exportTransactionsAsPdf() {
+            // Construct URL with current filters if needed
+            const searchTerm = searchInput.value.trim();
+            const status = statusFilter.value;
+            const startDate = startDateInput.value;
+            const endDate = endDateInput.value;
+
+            const queryParams = new URLSearchParams();
+            if (searchTerm) queryParams.append('search', searchTerm);
+            if (status) queryParams.append('status', status);
+            if (startDate) queryParams.append('start_date', startDate);
+            if (endDate) queryParams.append('end_date', endDate);
+
+            // This will call the new backend script: admin/api/export_transactions_pdf.php
+            window.location.href = `api/export_transactions_pdf.php?${queryParams.toString()}`;
+            displayMessageBox('Generating PDF export...', 'info');
+        }
+
+        function exportTransactionsAsExcel() {
+            // Construct URL with current filters if needed
+            const searchTerm = searchInput.value.trim();
+            const status = statusFilter.value;
+            const startDate = startDateInput.value;
+            const endDate = endDateInput.value;
+
+            const queryParams = new URLSearchParams();
+            if (searchTerm) queryParams.append('search', searchTerm);
+            if (status) queryParams.append('status', status);
+            if (startDate) queryParams.append('start_date', startDate);
+            if (endDate) queryParams.append('end_date', endDate);
+
+            // This will call the new backend script: admin/api/export_transactions_excel.php
+            window.location.href = `api/export_transactions_excel.php?${queryParams.toString()}`;
+            displayMessageBox('Generating Excel export...', 'info');
+        }
+
 
         // Initial fetch on page load
-        document.addEventListener('DOMContentLoaded', fetchAndDisplayTransactions);
+        document.addEventListener('DOMContentLoaded', function() {
+            fetchAndDisplayTransactions();
+
+            // Event Listeners for pagination buttons are already defined above
+            // Event Listeners for Filters are already defined above
+
+            // New Action Button Event Listeners
+            if (exportPdfBtn) exportPdfBtn.addEventListener('click', exportTransactionsAsPdf);
+            if (exportExcelBtn) exportExcelBtn.addEventListener('click', exportTransactionsAsExcel);
+            // Check if deleteSelectedBtn exists before adding listener (it only exists for super_admin/admin)
+            if (deleteSelectedBtn) deleteSelectedBtn.addEventListener('click', deleteSelectedTransactions);
+
+            // Initial state for delete selected button and checkbox listeners
+            updateDeleteSelectedButtonState();
+            attachCheckboxListeners();
+        });
 
     </script>
 

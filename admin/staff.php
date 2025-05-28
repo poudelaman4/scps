@@ -11,18 +11,12 @@ if (!isset($_SESSION['admin_id']) || empty($_SESSION['admin_id'])) {
 }
 // --- END REQUIRE ADMIN LOGIN ---
 
-// You might want to restrict access to this page based on admin role in the future
-// For example, only 'super_administrator' can manage other admins.
-// if ($_SESSION['admin_role'] !== 'administrator' && $_SESSION['admin_role'] !== 'super_administrator') {
-//    $_SESSION['error_message'] = "You do not have permission to access this page.";
-//    header('Location: dashboard.php');
-//    exit();
-// }
-
+// Get current admin's role from session
+$current_admin_id = $_SESSION['admin_id'] ?? null;
+$admin_username = $_SESSION['admin_username'] ?? 'Admin';
+$admin_role = $_SESSION['admin_role'] ?? 'N/A'; // Crucial: Get the logged-in admin's role
 
 require_once '../includes/db_connection.php';
-$admin_username = $_SESSION['admin_username'] ?? 'Admin';
-$admin_role = $_SESSION['admin_role'] ?? 'N/A';
 
 include '../includes/packages.php'; // Tailwind, Flowbite, etc.
 include '../includes/admin_header.php';
@@ -37,64 +31,65 @@ include '../includes/admin_header.php';
     <title>Manage Staff</title>
     <?php // packages.php is included above ?>
     <style>
+        /* Ensure body background is consistently white and text is dark */
+        body {
+            background-color: #ffffff; /* Pure white background */
+            font-family: 'Inter', sans-serif;
+            color: #1a202c; /* Dark gray for text */
+        }
+        /* Remove specific dark mode background for body to prevent override */
+        /* .dark body {
+            background-color: #1a202c;
+            color: #f8f8f8;
+        } */
+
         .table-message {
             text-align: center;
             padding: 1.5rem;
             color: #6b7280; /* gray-500 */
         }
+        /* Removed dark mode specific styles for table-message */
+        /* .dark .table-message {
+            color: #9ca3af;
+        } */
         .action-btn {
             margin-right: 0.5rem; /* Spacing between action buttons */
         }
     </style>
 </head>
-<body class="bg-white font-sans">
-
-    <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+<body class="bg-white font-sans"> <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
 
         <div id="staff-action-confirmation" class="fixed top-5 left-1/2 -translate-x-1/2 bg-green-500 text-white p-4 rounded-md shadow-lg z-50 opacity-0 hidden transition-all duration-500 ease-in-out transform">
             Action successful!
         </div>
 
         <div class="flex justify-between items-center mb-6">
-            <h1 class="text-3xl font-bold text-gray-900">Staff Management</h1>
+            <h1 class="text-3xl font-bold text-gray-900">Staff Management</h1> <?php if ($admin_role === 'super_administrator'): ?>
             <a href="add_staff.php" id="addStaffButton" class="bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2 px-4 rounded focus:outline-none focus:shadow-outline">
                 <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-5 h-5 inline-block mr-1 align-middle">
                   <path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
                 </svg>
                 Add New Staff
             </a>
+            <?php endif; ?>
         </div>
 
-        <div class="bg-white shadow rounded-lg overflow-hidden">
-            <div class="overflow-x-auto">
-                <table class="min-w-full divide-y divide-gray-200">
-                    <thead class="bg-gray-50">
-                        <tr>
-                            <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Full Name</th>
-                            <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Username</th>
-                            <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Role</th>
-                            <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
-                            <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Last Login</th>
-                            <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
-                        </tr>
+        <div class="bg-white shadow rounded-lg overflow-hidden"> <div class="overflow-x-auto">
+                <table class="min-w-full divide-y divide-gray-200"> <thead class="bg-gray-50"> <tr>
+                            <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Full Name</th> <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Username</th> <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Role</th> <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th> <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Last Login</th> <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th> </tr>
                     </thead>
-                    <tbody class="bg-white divide-y divide-gray-200" id="staffTableBody">
-                        <tr>
+                    <tbody class="bg-white divide-y divide-gray-200" id="staffTableBody"> <tr>
                             <td colspan="6" class="table-message">Loading staff members...</td>
                         </tr>
                     </tbody>
                 </table>
             </div>
 
-            <div class="px-6 py-4 flex items-center justify-between border-t border-gray-200" id="staffPaginationContainer" style="display: none;">
-                <div class="flex-1 flex justify-between sm:hidden">
-                    <button id="staffPrevMobile" class="relative inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50"> Previous </button>
-                    <button id="staffNextMobile" class="ml-3 relative inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50"> Next </button>
-                </div>
+            <div class="px-6 py-4 flex items-center justify-between border-t border-gray-200" id="staffPaginationContainer" style="display: none;"> <div class="flex-1 flex justify-between sm:hidden">
+                    <button id="staffPrevMobile" class="relative inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50"> Previous </button> <button id="staffNextMobile" class="ml-3 relative inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50"> Next </button> </div>
                 <div class="hidden sm:flex-1 sm:flex sm:items-center sm:justify-between">
                     <div>
-                        <p class="text-sm text-gray-700">
-                            Showing <span class="font-medium" id="staffShowingFrom">0</span> to <span class="font-medium" id="staffShowingTo">0</span> of <span class="font-medium" id="staffTotalRecords">0</span> results
+                        <p class="text-sm text-gray-700"> Showing <span class="font-medium" id="staffShowingFrom">0</span> to <span class="font-medium" id="staffShowingTo">0</span> of <span class="font-medium" id="staffTotalRecords">0</span> results
                         </p>
                     </div>
                     <div>
@@ -102,25 +97,22 @@ include '../includes/admin_header.php';
                             <button id="staffPrev" class="relative inline-flex items-center px-2 py-2 rounded-l-md border border-gray-300 bg-white text-sm font-medium text-gray-500 hover:bg-gray-50">
                                 <span class="sr-only">Previous</span>
                                 <svg class="h-5 w-5" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true"><path fill-rule="evenodd" d="M12.707 5.293a1 1 0 010 1.414L9.414 10l3.293 3.293a1 1 0 01-1.414 1.414l-4-4a1 1 0 010-1.414l4-4a1 1 0 011.414 0z" clip-rule="evenodd" /></svg>
-                            </button>
-                            <span id="staffPageNumbers" class="relative inline-flex items-center px-4 py-2 border border-gray-300 bg-white text-sm font-medium text-gray-700">...</span>
-                            <button id="staffNext" class="relative inline-flex items-center px-2 py-2 rounded-r-md border border-gray-300 bg-white text-sm font-medium text-gray-500 hover:bg-gray-50">
+                            </button> <span id="staffPageNumbers" class="relative inline-flex items-center px-4 py-2 border border-gray-300 bg-white text-sm font-medium text-gray-700">...</span> <button id="staffNext" class="relative inline-flex items-center px-2 py-2 rounded-r-md border border-gray-300 bg-white text-sm font-medium text-gray-500 hover:bg-gray-50">
                                 <span class="sr-only">Next</span>
                                 <svg class="h-5 w-5" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true"><path fill-rule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10l-3.293-3.293a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clip-rule="evenodd" /></svg>
-                            </button>
-                        </nav>
+                            </button> </nav>
                     </div>
                 </div>
             </div>
         </div>
     </main>
 
+    <?php // Removed include '../includes/footer.php'; // Standard footer ?>
+
     <script>
         const staffActionConfirmation = document.getElementById('staff-action-confirmation');
         function showStaffActionConfirmation(message = 'Success!', type = 'success') { // type can be 'success', 'error', 'warning'
             if (!staffActionConfirmation) return;
-            staffActionConfirmation.textContent = message;
-            
             let bgColor = 'bg-green-500'; // Default success
             if (type === 'error') bgColor = 'bg-red-500';
             else if (type === 'warning') bgColor = 'bg-yellow-500';
@@ -141,10 +133,14 @@ include '../includes/admin_header.php';
         }
 
         function formatDateTime(dateTimeStr) {
-            if (!dateTimeStr || dateTimeStr === '0000-00-00 00:00:00') return 'Never'; // Handle null or default zero datetime
+            // Handle null, undefined, or empty string explicitly
+            if (!dateTimeStr || dateTimeStr === '0000-00-00 00:00:00') return 'Never';
             try {
                 const date = new Date(dateTimeStr);
-                if (isNaN(date.getTime())) { return 'Invalid Date'; }
+                if (isNaN(date.getTime())) {
+                    console.warn("Invalid date provided to formatDateTime:", dateTimeStr);
+                    return 'Invalid Date';
+                }
                 const options = { year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit', hour12: true };
                 return date.toLocaleDateString('en-IN', options); // Adjust locale as needed
             } catch (e) {
@@ -156,6 +152,10 @@ include '../includes/admin_header.php';
         let staffCurrentPage = 1;
         let staffItemsPerPage = 10; // Or load from user preference
         let staffTotalRecords = 0;
+
+        // PHP variables made available to JavaScript
+        const currentAdminId = <?php echo json_encode($current_admin_id); ?>;
+        const currentAdminRole = <?php echo json_encode($admin_role); ?>;
 
         async function fetchStaffMembers(page = 1, itemsPerPage = 10, searchTerm = '') {
             const tableBody = document.getElementById('staffTableBody');
@@ -175,7 +175,7 @@ include '../includes/admin_header.php';
             });
 
             try {
-                // TODO: Create this API endpoint: admin/api/fetch_staff.php
+                // Assuming admin/api/fetch_staff.php exists and works correctly
                 const response = await fetch(`./api/fetch_staff.php?${queryParams.toString()}`);
                 const data = await response.json();
 
@@ -186,7 +186,6 @@ include '../includes/admin_header.php';
                     if (data.staff && data.staff.length > 0) {
                         paginationContainer.style.display = 'flex';
                     }
-                    // showStaffActionConfirmation(data.message || 'Staff fetched.', 'success'); // Maybe too noisy for every fetch
                 } else {
                     tableBody.innerHTML = `<tr><td colspan="6" class="table-message">${htmlspecialchars(data.message || 'No staff members found or error loading.')}</td></tr>`;
                     showStaffActionConfirmation(data.message || 'Could not fetch staff.', 'error');
@@ -209,41 +208,65 @@ include '../includes/admin_header.php';
             if (staffList && staffList.length > 0) {
                 staffList.forEach(staff => {
                     const statusBadgeClass = staff.is_active == 1
-                        ? 'bg-green-100 text-green-800'
-                        : 'bg-red-100 text-red-800';
+                        ? 'bg-green-100 text-green-800' // Removed dark:bg-green-700 dark:text-green-200
+                        : 'bg-red-100 text-red-800'; // Removed dark:bg-red-700 dark:text-red-200
                     const statusText = staff.is_active == 1 ? 'Active' : 'Inactive';
+
+                    let actionButtonsHtml = '';
+
+                    // Determine if the current logged-in admin can modify this staff member
+                    const canModify =
+                        currentAdminRole === 'super_administrator' || // Super admin can modify anyone
+                        (currentAdminId !== staff.staff_id && // Cannot modify self through this table
+                        (staff.role !== 'super_administrator' && staff.role !== 'administrator')); // Regular admin cannot modify super admins or other regular admins
+
+                    // Add edit button
+                    if (canModify) {
+                        actionButtonsHtml += `
+                            <a href="edit_staff.php?id=${staff.staff_id}" class="text-indigo-600 hover:text-indigo-900 action-btn edit-staff-btn" data-staff-id="${staff.staff_id}" title="Edit"> <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-5 h-5 inline-block"><path stroke-linecap="round" stroke-linejoin="round" d="m16.862 4.487 1.687-1.688a1.875 1.875 0 1 1 2.652 2.652L10.582 16.07a4.5 4.5 0 0 1-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 0 1 1.13-1.897l8.932-8.931Zm0 0L19.5 7.125M18 14v4.75A2.25 2.25 0 0 1 15.75 21H5.25A2.25 2.25 0 0 1 3 18.75V8.25A2.25 2.25 0 0 1 5.25 6H10" /></svg>
+                            </a>
+                        `;
+
+                        // Add toggle status button
+                        actionButtonsHtml += `
+                            <button class="text-red-600 hover:text-red-900 action-btn delete-staff-btn" data-staff-id="${staff.staff_id}" data-staff-username="${htmlspecialchars(staff.username)}" data-staff-role="${htmlspecialchars(staff.role)}" title="${staff.is_active == 1 ? 'Deactivate' : 'Activate'}"> ${staff.is_active == 1 ?
+                                 `<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-5 h-5 inline-block"><path stroke-linecap="round" stroke-linejoin="round" d="M18.364 18.364A9 9 0 0 0 5.636 5.636m12.728 12.728A9 9 0 0 1 5.636 5.636m12.728 12.728L5.636 5.636" /></svg>` :
+                                 `<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-5 h-5 inline-block"><path stroke-linecap="round" stroke-linejoin="round" d="M9 12.75 11.25 15 15 9.75M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" /></svg>`
+                               }
+                            </button>
+                        `;
+                    } else if (currentAdminId == staff.staff_id) { // Use == for comparison as types might differ
+                        // If it's the logged-in admin's own row, and they can't modify themselves via these buttons
+                        // Provide a link to their profile/settings page instead
+                        actionButtonsHtml += `
+                            <a href="settings.php" class="text-blue-600 hover:text-blue-900 action-btn" title="Manage your own profile"> <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-5 h-5 inline-block"><path stroke-linecap="round" stroke-linejoin="round" d="M10.5 6h9.75M10.5 6a1.5 1.5 0 1 1-3 0m3 0a1.5 1.5 0 1 0-3 0M3.75 6H7.5m3 12h9.75m-9.75 0a1.5 1.5 0 0 1-3 0m3 0a1.5 1.5 0 0 0-3 0m-3.75 0H7.5m9-6h3.75m-3.75 0a1.5 1.5 0 0 1-3 0m3 0a1.5 1.5 0 0 0-3 0m-9.75 0h9.75" /></svg>
+                                Manage Self
+                            </a>
+                        `;
+                    } else {
+                        // If no modification is allowed, display a dash or "N/A"
+                        actionButtonsHtml = `<span class="text-gray-500">N/A</span>`; }
+
 
                     const row = `
                         <tr>
-                            <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">${htmlspecialchars(staff.full_name)}</td>
-                            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">${htmlspecialchars(staff.username)}</td>
-                            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">${htmlspecialchars(staff.role)}</td>
-                            <td class="px-6 py-4 whitespace-nowrap text-sm">
+                            <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">${htmlspecialchars(staff.full_name)}</td> <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">${htmlspecialchars(staff.username)}</td> <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">${htmlspecialchars(staff.role)}</td> <td class="px-6 py-4 whitespace-nowrap text-sm">
                                 <span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${statusBadgeClass}">
                                     ${statusText}
                                 </span>
                             </td>
-                            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">${formatDateTime(staff.last_login)}</td>
-                            <td class="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                                <a href="edit_staff.php?id=${staff.staff_id}" class="text-indigo-600 hover:text-indigo-900 action-btn edit-staff-btn" data-staff-id="${staff.staff_id}" title="Edit">
-                                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-5 h-5 inline-block"><path stroke-linecap="round" stroke-linejoin="round" d="m16.862 4.487 1.687-1.688a1.875 1.875 0 1 1 2.652 2.652L10.582 16.07a4.5 4.5 0 0 1-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 0 1 1.13-1.897l8.932-8.931Zm0 0L19.5 7.125M18 14v4.75A2.25 2.25 0 0 1 15.75 21H5.25A2.25 2.25 0 0 1 3 18.75V8.25A2.25 2.25 0 0 1 5.25 6H10" /></svg>
-                                </a>
-                                <button class="text-red-600 hover:text-red-900 action-btn delete-staff-btn" data-staff-id="${staff.staff_id}" data-staff-username="${htmlspecialchars(staff.username)}" title="${staff.is_active == 1 ? 'Deactivate' : 'Activate'}">
-                                   ${staff.is_active == 1 ? 
-                                     `<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-5 h-5 inline-block"><path stroke-linecap="round" stroke-linejoin="round" d="M18.364 18.364A9 9 0 0 0 5.636 5.636m12.728 12.728A9 9 0 0 1 5.636 5.636m12.728 12.728L5.636 5.636" /></svg>` :
-                                     `<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-5 h-5 inline-block"><path stroke-linecap="round" stroke-linejoin="round" d="M9 12.75 11.25 15 15 9.75M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" /></svg>`
-                                   }
-                                </button>
+                            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">${formatDateTime(staff.last_login)}</td> <td class="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                                ${actionButtonsHtml}
                             </td>
                         </tr>
                     `;
                     tableBody.innerHTML += row;
                 });
-                 // Add event listeners for the newly created edit and delete buttons
+                 // Add event listeners for the newly created delete/toggle buttons
                 document.querySelectorAll('.delete-staff-btn').forEach(button => {
                     button.addEventListener('click', handleDeleteStaff);
                 });
-                // Edit buttons go to a new page, so no complex listener needed here unless using modals.
+                // Edit buttons go to a new page (edit_staff.php), so no complex listener needed here.
 
             } else {
                 tableBody.innerHTML = `<tr><td colspan="6" class="table-message">No staff members found.</td></tr>`;
@@ -316,20 +339,35 @@ include '../includes/admin_header.php';
             const button = event.currentTarget;
             const staffId = button.dataset.staffId;
             const staffUsername = button.dataset.staffUsername;
+            const staffRole = button.dataset.staffRole; // Get the target staff's role
             const isActive = button.title.toLowerCase().includes('deactivate'); // True if current action is to deactivate
 
             const actionText = isActive ? 'deactivate' : 'activate';
+
+            // Frontend check: Prevent regular admin from modifying super admin or other regular admins
+            if (currentAdminRole !== 'super_administrator' && (staffRole === 'super_administrator' || staffRole === 'administrator')) {
+                 showStaffActionConfirmation(`You do not have permission to ${actionText} a staff member with role "${staffRole}".`, 'error');
+                 return;
+            }
+            // Also prevent modifying self via this button if it's the current user
+            if (currentAdminId == staffId) {
+                showStaffActionConfirmation('You cannot change your own status from this table. Please use your profile settings.', 'warning');
+                return;
+            }
+
+
+            // Using native confirm() as per your original file's logic
             const confirmAction = confirm(`Are you sure you want to ${actionText} staff member "${staffUsername}" (ID: ${staffId})?`);
 
             if (confirmAction) {
                 try {
-                    // TODO: Create this API endpoint: admin/api/toggle_staff_status.php or admin/api/delete_staff.php
-                    const response = await fetch('./api/toggle_staff_status.php', { // Or delete_staff.php
+                    // Assuming admin/api/toggle_staff_status.php exists and works correctly
+                    const response = await fetch('./api/toggle_staff_status.php', {
                         method: 'POST',
                         headers: {
                             'Content-Type': 'application/json',
                         },
-                        body: JSON.stringify({ 
+                        body: JSON.stringify({
                             staff_id: staffId,
                             action: actionText // Send 'deactivate' or 'activate'
                         }),

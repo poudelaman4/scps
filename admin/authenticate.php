@@ -33,47 +33,44 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $result_find_admin = mysqli_stmt_get_result($stmt_find_admin);
 
             if (mysqli_num_rows($result_find_admin) === 1) {
-                $admin_info = mysqli_fetch_assoc($result_find_admin);
-                $staff_id = $admin_info['staff_id'];
-                $stored_password_hash = $admin_info['password_hash'];
-                $is_active = $admin_info['is_active'];
+                $admin_data = mysqli_fetch_assoc($result_find_admin);
 
-                // --- Check if admin is active ---
-                if (!$is_active) {
-                     $_SESSION['admin_login_error'] = 'Your account is not active.';
-                     error_log('Admin Login Failed: Account inactive for username: ' . $username);
-                }
-                // --- Verify the password ---
-                else if (password_verify($password, $stored_password_hash)) {
-                    // --- ADMIN LOGIN SUCCESS! ---
-                    $_SESSION['admin_id'] = $staff_id;
-                    $_SESSION['admin_username'] = $admin_info['username'];
-                    $_SESSION['admin_role'] = $admin_info['role'];
+                // Verify the password
+                if (password_verify($password, $admin_data['password_hash'])) {
+                    // Password matches - Admin is authenticated!
 
-                    session_regenerate_id(true);
-                    unset($_SESSION['admin_login_error']);
-
-                    // --- Log Successful Admin Login Activity ---
-                    if (isset($link) && $link !== false) {
-                        $activity_type = 'admin_login';
-                        $description = "Admin '" . mysqli_real_escape_string($link, $username) . "' logged in successfully.";
-                        $admin_id = $staff_id; // The admin who logged in
-                        $user_id = null; // Not related to a student user
-                        $related_id = null; // Not related to a specific record like product or transaction
-
-                        $sql_log = "INSERT INTO activity_log (timestamp, activity_type, description, admin_id, user_id, related_id) VALUES (NOW(), ?, ?, ?, ?, ?)";
-                        if ($stmt_log = mysqli_prepare($link, $sql_log)) {
-                            // Use 's' for string types, 'i' for integer (admin_id), 'i' for user_id (null), 'i' for related_id (null)
-                            // Note: If user_id and related_id are INT in DB and nullable, passing null works. If NOT NULL, pass 0 or a placeholder.
-                            mysqli_stmt_bind_param($stmt_log, "ssiii", $activity_type, $description, $admin_id, $user_id, $related_id);
-                            mysqli_stmt_execute($stmt_log); // Execute without strict error checking here
-                            mysqli_stmt_close($stmt_log);
-                        } else {
-                            error_log("Error preparing activity log query for admin login: " . mysqli_error($link));
-                        }
+                    // Check if admin is active
+                    if ($admin_data['is_active'] == 0) {
+                        $_SESSION['admin_login_error'] = 'Your account is currently inactive. Please contact support.';
+                        error_log('Admin Login Failed: Inactive account for username: ' . $username);
+                        header('Location: login.php');
+                        exit();
                     }
-                    // --- End Log Successful Admin Login Activity ---
 
+                    // Set session variables
+                    $_SESSION['admin_id'] = $admin_data['staff_id'];
+                    $_SESSION['admin_username'] = $admin_data['username'];
+                    $_SESSION['admin_role'] = $admin_data['role'];
+
+                    // --- START ADDED CODE BLOCK ---
+                    // Line 57: Update last_login timestamp for the logged-in admin
+                    $admin_id_to_update = $admin_data['staff_id']; // Use the ID fetched from the database
+                    $sql_update_last_login = "UPDATE staff SET last_login = NOW() WHERE staff_id = ?";
+                    if ($stmt_update = mysqli_prepare($link, $sql_update_last_login)) {
+                        mysqli_stmt_bind_param($stmt_update, "i", $admin_id_to_update);
+                        if (mysqli_stmt_execute($stmt_update)) {
+                            // Successfully updated last_login
+                            // You can add a log here if needed:
+                            // error_log("Last login updated for admin_id: " . $admin_id_to_update);
+                        } else {
+                            // Log error if update fails (important for debugging)
+                            error_log("Error updating last_login for admin ID {$admin_id_to_update}: " . mysqli_stmt_error($stmt_update));
+                        }
+                        mysqli_stmt_close($stmt_update);
+                    } else {
+                        error_log("Error preparing last_login update statement: " . mysqli_error($link));
+                    }
+                    // --- END ADDED CODE BLOCK ---
 
                     // Redirect to the admin dashboard (in the same admin folder)
                     header('Location: dashboard.php');
@@ -112,5 +109,4 @@ mysqli_close($link);
 header('Location: login.php'); // Redirect back to admin login (in same folder)
 exit();
 
-// Note: No closing PHP tag is intentional
-?>
+// Note: No closing PHP tag is intentional to prevent accidental whitespace issues.

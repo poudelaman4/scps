@@ -3,7 +3,7 @@
 -- https://www.phpmyadmin.net/
 --
 -- Host: 127.0.0.1
--- Generation Time: May 27, 2025 at 06:30 PM
+-- Generation Time: May 28, 2025 at 11:42 AM
 -- Server version: 10.4.28-MariaDB
 -- PHP Version: 8.2.4
 
@@ -114,7 +114,27 @@ INSERT INTO `activity_log` (`activity_id`, `timestamp`, `activity_type`, `descri
 (71, '2025-05-27 21:13:02', 'interface_update', 'Admin \'admin\' (ID: 1) updated interface settings (Theme: light, Items: 10).', 1, NULL, 1),
 (72, '2025-05-27 21:59:56', 'staff_add', 'Admin \'admin\' added new staff member \'aman\' (ID: 2) with role \'administrator\'.', 1, NULL, 2),
 (73, '2025-05-27 22:00:26', 'staff_edit', 'Admin \'admin\' updated details for staff \'aman\' (ID: 2). Password updated.', 1, NULL, 2),
-(74, '2025-05-27 22:00:38', 'staff_edit', 'Admin \'admin\' updated details for staff \'aman\' (ID: 2). Password updated.', 1, NULL, 2);
+(74, '2025-05-27 22:00:38', 'staff_edit', 'Admin \'admin\' updated details for staff \'aman\' (ID: 2). Password updated.', 1, NULL, 2),
+(75, '2025-05-27 22:26:54', 'Order', 'Student Rozal Dahal (ID: 15) purchased items via NFC. Total: Rs. 85.00', NULL, 15, 36),
+(76, '2025-05-27 22:27:50', 'admin_login', 'Admin \'admin\' logged in successfully.', 1, NULL, NULL),
+(77, '2025-05-27 22:28:27', 'product_updated', 'Admin \'admin\' updated product ID 2 (\'sandwich\').', 1, NULL, 2),
+(78, '2025-05-27 22:29:08', 'balance_update', 'Admin \'admin\' added NPR 85 for NFC ID \'1019\' (Student ID: 15). New balance: NPR 1,000.00.', 1, NULL, 15),
+(79, '2025-05-27 22:29:28', 'staff_edit', 'Admin \'admin\' updated details for staff \'aman\' (ID: 2).', 1, NULL, 2),
+(80, '2025-05-27 22:29:39', 'staff_edit', 'Admin \'admin\' updated details for staff \'aman\' (ID: 2).', 1, NULL, 2),
+(81, '2025-05-27 22:31:12', 'Order', 'Student Rozal Dahal (ID: 15) purchased items via NFC. Total: Rs. 15.00', NULL, 15, 37),
+(82, '2025-05-27 22:31:58', 'admin_login', 'Admin \'aman\' logged in successfully.', 2, NULL, NULL),
+(83, '2025-05-28 13:46:36', 'admin_login', 'Admin \'admin\' logged in successfully.', 1, NULL, NULL),
+(84, '2025-05-28 13:48:21', 'staff_edit', 'Admin \'admin\' updated details for staff \'aman\' (ID: 2).', 1, NULL, 2),
+(85, '2025-05-28 13:48:39', 'admin_login', 'Admin \'aman\' logged in successfully.', 2, NULL, NULL),
+(86, '2025-05-28 13:48:50', 'staff_edit', 'Admin \'aman\' updated details for staff \'admin\' (ID: 1).', 2, NULL, 1),
+(87, '2025-05-28 13:49:10', 'admin_login', 'Admin \'aman\' logged in successfully.', 2, NULL, NULL),
+(88, '2025-05-28 13:50:33', 'staff_edit', 'Admin \'aman\' updated details for staff \'admin\' (ID: 1).', 2, NULL, 1),
+(89, '2025-05-28 13:57:39', 'profile_update', 'Admin \'aman\' (ID: 2) updated their profile details.', 2, NULL, 2),
+(90, '2025-05-28 14:03:50', 'admin_login', 'Admin \'admin\' logged in successfully.', 1, NULL, NULL),
+(91, '2025-05-28 14:16:11', 'product_added', 'Admin \'admin\' added new product \'jerry\' (ID: 10).', 1, NULL, 10),
+(92, '2025-05-28 14:40:41', 'product_updated', 'Admin \'admin\' updated product ID 10 (\'jerry\').', 1, NULL, 10),
+(93, '2025-05-28 14:48:24', 'product_updated', 'Admin \'admin\' updated product ID 10 (\'jerry\').', 1, NULL, 10),
+(94, '2025-05-28 15:04:43', 'profile_update', 'Admin \'admin\' (ID: 1) updated their profile details.', 1, NULL, 1);
 
 -- --------------------------------------------------------
 
@@ -138,9 +158,10 @@ CREATE TABLE `food` (
 
 INSERT INTO `food` (`food_id`, `name`, `price`, `image_path`, `category`, `description`, `is_available`) VALUES
 (1, 'samosa', 20.00, 'images/samosa.jpg', 'Veg', 'tasty samosa', 1),
-(2, 'sandwich', 85.00, 'images/veg_sandwich.jpg', 'Veg', 'veg sandwich', 1),
+(2, 'sandwich', 85.00, 'images/veg_sandwich.jpg', 'Snack', 'veg sandwich', 1),
 (3, 'masala chai', 15.00, 'images/masala_chai.jpg', 'Beverage', 'chai lelo', 1),
-(9, 'chicken burger', 90.00, 'images/img_6829f75d2c3bc2.00748161.jpg', 'Non-Veg', 'delicious', 1);
+(9, 'chicken burger', 90.00, 'images/img_6829f75d2c3bc2.00748161.jpg', 'Non-Veg', 'delicious', 1),
+(10, 'jerry', 25.00, 'images/img_6836d15c60c7c2.98979809.webp', 'Dessert', 'diabetes', 1);
 
 -- --------------------------------------------------------
 
@@ -167,7 +188,7 @@ INSERT INTO `nfc_card` (`nfc_id`, `student_id`, `current_balance`, `password_has
 ('1002', 12, 537.00, '$2y$10$bG6m3z4Ljv8LRQt56w/kTOOld7Xf4Rmsx4JYEUlmLdbufLVsjbVbi', NULL, 'Active', '2025-05-08 23:05:32'),
 ('1003', 13, 500.00, 'sample_hashed_password_bob', NULL, 'Active', '2025-05-08 23:05:32'),
 ('1004', 14, 1000.00, 'sample_hashed_password_charlie', NULL, 'Active', '2025-05-08 23:05:32'),
-('1019', 15, 1000.00, '$2y$10$o2GPtcK5iapB1.Mb8/q5TucGiQT9WG5/N7vhnoR2rrh8KE9C2uRje', NULL, 'Active', '2025-05-16 11:52:38');
+('1019', 15, 985.00, '$2y$10$o2GPtcK5iapB1.Mb8/q5TucGiQT9WG5/N7vhnoR2rrh8KE9C2uRje', NULL, 'Active', '2025-05-16 11:52:38');
 
 -- --------------------------------------------------------
 
@@ -195,8 +216,8 @@ CREATE TABLE `staff` (
 --
 
 INSERT INTO `staff` (`staff_id`, `full_name`, `username`, `password_hash`, `role`, `is_active`, `last_login`, `created_at`, `password_reset_token`, `token_expiry`, `theme_preference`, `items_per_page`) VALUES
-(1, 'admin user', 'admin', '$2y$10$gQV.R4xUWck7z6zoAzNeAep.1J3BjBJqwsuGTbujeOkWOn2BJiL/G', 'administrator', 1, NULL, '2025-05-08 01:06:43', NULL, NULL, 'light', 10),
-(2, 'aman', 'aman', '$2y$10$EoIDhGZ97lZ2Brw06uGpd.uhlUepUV5ovmtVYV05KelDtg8Zykem6', 'administrator', 1, NULL, '2025-05-27 21:59:56', NULL, NULL, 'light', 10);
+(1, 'admin user', 'admin', '$2y$10$gQV.R4xUWck7z6zoAzNeAep.1J3BjBJqwsuGTbujeOkWOn2BJiL/G', 'administrator', 1, '2025-05-28 14:13:14', '2025-05-08 01:06:43', NULL, NULL, 'light', 10),
+(2, 'aman', 'aman', '$2y$10$EoIDhGZ97lZ2Brw06uGpd.uhlUepUV5ovmtVYV05KelDtg8Zykem6', 'staff_member', 1, '2025-05-28 14:13:03', '2025-05-27 21:59:56', NULL, NULL, 'light', 10);
 
 -- --------------------------------------------------------
 
@@ -273,7 +294,8 @@ INSERT INTO `transaction` (`txn_id`, `nfc_id`, `student_id`, `total_amount`, `st
 (32, '1019', 15, 85.00, 'success', '2025-05-27 15:24:41'),
 (33, '1001', 1, 20.00, 'success', '2025-05-27 15:25:10'),
 (34, '1019', 15, 20.00, 'success', '2025-05-27 16:16:37'),
-(35, '1019', 15, 20.00, 'success', '2025-05-27 16:37:22');
+(35, '1019', 15, 20.00, 'success', '2025-05-27 16:37:22'),
+(36, '1019', 15, 85.00, 'success', '2025-05-27 22:26:54');
 
 -- --------------------------------------------------------
 
@@ -327,7 +349,8 @@ INSERT INTO `transaction_item` (`item_id`, `txn_id`, `food_id`, `quantity`, `uni
 (30, 32, 2, 1, 85.00),
 (31, 33, 1, 1, 20.00),
 (32, 34, 1, 1, 20.00),
-(33, 35, 1, 1, 20.00);
+(33, 35, 1, 1, 20.00),
+(34, 36, 2, 1, 85.00);
 
 --
 -- Indexes for dumped tables
@@ -398,13 +421,13 @@ ALTER TABLE `transaction_item`
 -- AUTO_INCREMENT for table `activity_log`
 --
 ALTER TABLE `activity_log`
-  MODIFY `activity_id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=75;
+  MODIFY `activity_id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=95;
 
 --
 -- AUTO_INCREMENT for table `food`
 --
 ALTER TABLE `food`
-  MODIFY `food_id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=10;
+  MODIFY `food_id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=11;
 
 --
 -- AUTO_INCREMENT for table `staff`
@@ -422,13 +445,13 @@ ALTER TABLE `student`
 -- AUTO_INCREMENT for table `transaction`
 --
 ALTER TABLE `transaction`
-  MODIFY `txn_id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=36;
+  MODIFY `txn_id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=38;
 
 --
 -- AUTO_INCREMENT for table `transaction_item`
 --
 ALTER TABLE `transaction_item`
-  MODIFY `item_id` bigint(20) UNSIGNED NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=34;
+  MODIFY `item_id` bigint(20) UNSIGNED NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=36;
 
 --
 -- Constraints for dumped tables

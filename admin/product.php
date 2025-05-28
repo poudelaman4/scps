@@ -261,7 +261,7 @@ include '../includes/admin_header.php'; // Ensure this path is correct
         // --- Pagination Variables ---
         let currentPage = 1;
         const itemsPerPage = 10; // Number of products per page
-        let totalProducts = 0; // Total number of products from the backend
+        let totalProducts = 0; // Initialize totalProducts to 0
 
 
         // --- Modal Functions ---
@@ -351,12 +351,14 @@ include '../includes/admin_header.php'; // Ensure this path is correct
                     return response.json();
                 })
                 .then(data => {
+                    console.log("Data received from backend:", data); // Log the received data for debugging
                     // Clear loading message or existing rows
                     productsTableBody.innerHTML = '';
 
                     if (data.success) {
-                        totalProducts = data.total_results || 0; // Update total products count
-                        renderPaginationControls(data.total_pages, data.current_page, data.total_results); // Update pagination
+                        // Ensure total_records is a number, default to 0 if not provided or invalid
+                        totalProducts = typeof data.total_records === 'number' ? data.total_records : 0; // Changed from data.total_results to data.total_records
+                        renderPaginationControls(data.total_pages, data.current_page, totalProducts); // Pass totalProducts
 
                         if (data.products && data.products.length > 0) {
                             data.products.forEach(product => {
@@ -417,6 +419,8 @@ include '../includes/admin_header.php'; // Ensure this path is correct
                     // Handle network errors or JSON parsing errors
                     productsTableBody.innerHTML = `<tr><td colspan="8" class="text-center py-4 text-red-600">Network Error: ${htmlspecialchars(error.message)}</td></tr>`;
                     console.error('Fetch error:', error);
+                    // Ensure pagination display is reset on error
+                    renderPaginationControls(0, 1, 0); // Reset pagination display on error
                 });
         }
 
@@ -434,8 +438,15 @@ include '../includes/admin_header.php'; // Ensure this path is correct
             currentPage = currentPageNum; // Update global current page
             totalProducts = totalResults; // Update global total products
 
-            paginationStartSpan.textContent = totalResults > 0 ? ((currentPage - 1) * itemsPerPage + 1) : 0;
-            paginationEndSpan.textContent = Math.min(currentPage * itemsPerPage, totalResults);
+            // Calculate start and end indices for display
+            // If totalResults is 0, start and end should both be 0.
+            // Otherwise, calculate based on current page and items per page.
+            const startIndex = totalResults > 0 ? ((currentPage - 1) * itemsPerPage + 1) : 0;
+            // The endIndex should not exceed totalResults
+            const endIndex = totalResults > 0 ? Math.min(currentPage * itemsPerPage, totalResults) : 0;
+
+            paginationStartSpan.textContent = startIndex;
+            paginationEndSpan.textContent = endIndex;
             paginationTotalSpan.textContent = totalResults;
 
             // Clear previous page number buttons

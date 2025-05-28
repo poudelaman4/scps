@@ -1,13 +1,12 @@
 <?php
-// admin/fetch_single_product.php - Fetches details for a single product
+// admin/Workspace_single_product.php - Fetches details for a single product
 
-// Start the session
 session_start();
+header('Content-Type: application/json');
 
 // --- REQUIRE ADMIN LOGIN ---
 // This script should only be accessible to logged-in admins
 if (!isset($_SESSION['admin_id']) || empty($_SESSION['admin_id'])) {
-    header('Content-Type: application/json');
     echo json_encode(['success' => false, 'message' => 'Unauthorized access. Please log in.']);
     exit();
 }
@@ -29,42 +28,33 @@ if (($_SERVER['REQUEST_METHOD'] === 'GET' || $_SERVER['REQUEST_METHOD'] === 'POS
     // --- Retrieve and Validate Input Data ---
     // Get the product ID and validate it as an integer
     $food_id = filter_input(INPUT_GET, 'food_id', FILTER_VALIDATE_INT);
-    if ($food_id === false || $food_id === null) {
-         // If not in GET, check POST (although GET is preferred for fetching)
-         $food_id = filter_input(INPUT_POST, 'food_id', FILTER_VALIDATE_INT);
+    // If it's a POST request, try to get from POST
+    if ($food_id === false && $_SERVER['REQUEST_METHOD'] === 'POST') {
+        $food_id = filter_input(INPUT_POST, 'food_id', FILTER_VALIDATE_INT);
     }
 
 
-    // Check if the food_id is valid
-    if ($food_id === false || $food_id === null) {
-        $response['message'] = 'Invalid product ID received.';
-        error_log('admin/fetch_single_product.php failed: Invalid food_id: ' . ($_REQUEST['food_id'] ?? 'not set')); // Log the invalid input
+    if ($food_id === false) {
+        $response['message'] = 'Invalid product ID.';
     } else {
-        // Validation passed, proceed to fetch from database
-
-        // --- Fetch Product from Database ---
-        // Using prepared statement
-        // Make sure the table name 'food' and column names match your database exactly
+        // --- Fetch product details from the database ---
         $sql_fetch = "SELECT food_id, name, description, price, category, image_path, is_available FROM food WHERE food_id = ?";
 
         if ($stmt_fetch = mysqli_prepare($link, $sql_fetch)) {
-            // Bind parameter (integer: i)
             mysqli_stmt_bind_param($stmt_fetch, "i", $food_id);
 
-            // Execute the prepared statement
             if (mysqli_stmt_execute($stmt_fetch)) {
                 $result = mysqli_stmt_get_result($stmt_fetch);
 
                 if (mysqli_num_rows($result) === 1) {
-                    // Product found
                     $product = mysqli_fetch_assoc($result);
                     $response['success'] = true;
-                    $response['message'] = 'Product fetched successfully!';
+                    $response['message'] = 'Product details fetched successfully.';
                     $response['product'] = $product;
                 } else {
                     // Product not found (0 rows) or multiple found (>1 row, shouldn't happen with food_id as primary key)
                     $response['message'] = 'Product not found.';
-                     error_log('admin/fetch_single_product.php failed: Product ID ' . $food_id . ' not found or multiple found.');
+                     error_log('admin/Workspace_single_product.php failed: Product ID ' . $food_id . ' not found or multiple found.');
                 }
 
                 mysqli_free_result($result);
@@ -72,7 +62,7 @@ if (($_SERVER['REQUEST_METHOD'] === 'GET' || $_SERVER['REQUEST_METHOD'] === 'POS
             } else {
                 // Database execution error
                 $response['message'] = 'Database error fetching product details.';
-                error_log('DB Error (admin/fetch_single_product.php): execute fetch: ' . mysqli_stmt_error($stmt_fetch));
+                error_log('DB Error (admin/Workspace_single_product.php): execute fetch: ' . mysqli_stmt_error($stmt_fetch));
             }
 
             mysqli_stmt_close($stmt_fetch); // Close statement
@@ -80,14 +70,14 @@ if (($_SERVER['REQUEST_METHOD'] === 'GET' || $_SERVER['REQUEST_METHOD'] === 'POS
         } else {
             // Database preparation error
             $response['message'] = 'Database error preparing product fetch.';
-            error_log('DB Error (admin/fetch_single_product.php): prepare fetch: ' . mysqli_error($link));
+            error_log('DB Error (admin/Workspace_single_product.php): prepare fetch: ' . mysqli_error($link));
         }
     }
 
 } else {
     // If request method is not GET/POST or food_id is not provided
     $response['message'] = 'Invalid request or missing product ID.';
-     error_log('admin/fetch_single_product.php received invalid request.');
+     error_log('admin/Workspace_single_product.php received invalid request.');
 }
 
 // Close the database connection
@@ -97,6 +87,4 @@ if (isset($link)) {
 
 // Send the JSON response
 echo json_encode($response);
-
-// Note: No closing PHP tag here is intentional
 ?>
