@@ -1,5 +1,3 @@
-// scps1/js/script.js - All frontend JavaScript logic
-
 document.addEventListener('DOMContentLoaded', function() {
     // --- DOM Elements ---
     const foodItemsContainer = document.getElementById('foodItemsContainer');
@@ -9,504 +7,419 @@ document.addEventListener('DOMContentLoaded', function() {
     const clearCartBtn = document.getElementById('clearCartBtn');
     const confirmationMessageBox = document.getElementById('confirmationMessageBox');
 
-    // Authentication elements
-    const authButton = document.getElementById('authButton');
-    const studentNameDisplay = document.getElementById('studentNameDisplay');
-    const studentBalanceDisplay = document.getElementById('studentBalanceDisplay');
+    // --- Payment Modal Elements ---
+    const paymentFlowModal = document.getElementById('paymentFlowModal');
+    const closePaymentModalBtn = document.getElementById('closePaymentModalBtn');
+    
+    // Step 1
+    const step1Div = document.getElementById('step1_scanNfc');
+    const nfcIdInput = document.getElementById('paymentNfcIdInput');
+    const nfcScanProceedBtn = document.getElementById('nfcScanProceedBtn');
+    const step1Message = document.getElementById('step1_message');
+    
+    // Step 2
+    const step2Div = document.getElementById('step2_confirmDetails');
+    const studentNameSpan = document.getElementById('paymentStudentName');
+    const currentBalanceSpan = document.getElementById('paymentCurrentBalance');
+    const paymentBillDetails = document.getElementById('paymentBillDetails');
+    const totalBillSpan = document.getElementById('paymentTotalBill');
+    const confirmProceedBtn = document.getElementById('confirmProceedBtn');
+    const confirmCancelBtn = document.getElementById('confirmCancelBtn');
 
-    // NFC Login Modal elements
-    const nfcLoginModal = document.getElementById('nfcLoginModal');
-    const closeNfcLoginModalBtn = document.getElementById('closeNfcLoginModalBtn');
-    const loginNfcCardIdInput = document.getElementById('loginNfcCardId');
-    const loginConfirmButton = document.getElementById('loginConfirmButton');
-    const loginMessage = document.getElementById('loginMessage');
-
-    // Password Only Payment Modal elements
-    const passwordOnlyModal = document.getElementById('passwordOnlyModal');
-    const closePasswordOnlyModalBtn = document.getElementById('closePasswordOnlyModalBtn');
-    const paymentPasswordInput = document.getElementById('paymentPassword');
-    const paymentConfirmButton = document.getElementById('paymentConfirmButton');
-    const paymentMessage = document.getElementById('paymentMessage');
-
-    // --- Global Cart Variable ---
+    // Step 3
+    const step3Div = document.getElementById('step3_enterPassword');
+    const passwordInput = document.getElementById('paymentPasswordInput');
+    const finalPayBtn = document.getElementById('finalPayBtn');
+    const step3Message = document.getElementById('step3_message');
+    
+    
+    // --- Global State ---
     let cart = [];
+    let paymentData = {}; 
 
     // --- Utility Functions ---
-
-    /**
-     * Displays a confirmation message to the user.
-     * @param {string} message - The message to display.
-     * @param {'success'|'error'|'info'} type - The type of message (for styling).
-     */
     function showConfirmation(message, type) {
         confirmationMessageBox.textContent = message;
-        confirmationMessageBox.className = `fixed bottom-20 left-1/2 transform -translate-x-1/2 p-4 rounded-lg font-semibold text-white z-50 shadow-lg ${type}`;
-        confirmationMessageBox.style.display = 'block';
-        setTimeout(() => {
-            confirmationMessageBox.style.display = 'none';
-        }, 3000); // Hide after 3 seconds
+        confirmationMessageBox.className = `fixed bottom-5 left-1/2 -translate-x-1/2 p-3 rounded-lg font-semibold text-white z-50 shadow-lg ${type}`;
+        setTimeout(() => { confirmationMessageBox.className += ' hidden'; }, 3000);
     }
 
-    /**
-     * Updates the UI to reflect login/logout state.
-     * @param {boolean} isLoggedIn - True if user is logged in, false otherwise.
-     * @param {string} studentName - The student's name.
-     * @param {number|string} studentBalance - The student's balance.
-     */
-    function updateAuthUI(isLoggedIn, studentName = 'Guest', studentBalance = 'N/A') {
-        if (isLoggedIn) {
-            authButton.textContent = 'Logout';
-            // Create the anchor tag for the student name
-            const profileLink = document.createElement('a');
-            profileLink.href = './student/profile.php'; // Path to student profile
-            profileLink.classList.add('text-blue-600', 'hover:text-blue-800', 'hover:underline', 'cursor-pointer', 'inline-block');
-            profileLink.textContent = studentName;
-            
-            // Clear existing content and append the new link
-            studentNameDisplay.innerHTML = '';
-            studentNameDisplay.appendChild(profileLink);
+    // --- Core Application Logic ---
 
-            studentBalanceDisplay.textContent = `Rs. ${parseFloat(studentBalance).toFixed(2)}`;
-        } else {
-            authButton.textContent = 'Login';
-            studentNameDisplay.innerHTML = 'Guest'; // Set directly as text
-            studentBalanceDisplay.textContent = 'Rs. N/A';
-        }
-    }
-
-    /**
-     * Fetches food items from the backend and displays them.
-     */
     async function fetchAndDisplayFoodItems() {
-        foodItemsContainer.innerHTML = '<div class="col-span-full text-center text-gray-500 text-lg py-10">Loading food items...</div>';
+        foodItemsContainer.innerHTML = '<div class="col-span-full text-center p-10"><i class="fas fa-spinner fa-spin text-3xl text-blue-500"></i></div>';
         try {
             const response = await fetch('./api/get_food_items.php');
-            // Check if the response is OK (status 200) before trying to parse JSON
-            if (!response.ok) {
-                const errorText = await response.text(); // Get raw text to see PHP errors
-                console.error('Network response was not ok:', response.status, errorText);
-                showConfirmation(`Server error: ${response.status}. See console for details.`, 'error');
-                foodItemsContainer.innerHTML = `<div class="col-span-full text-center text-red-500 text-lg py-10">Failed to load food items. Server responded with an error.</div>`;
-                return;
-            }
-
-            const data = await response.json(); // Attempt to parse JSON
-
+            const data = await response.json();
             if (data.success) {
+                foodItemsContainer.innerHTML = '';
                 if (data.food_items.length === 0) {
-                    foodItemsContainer.innerHTML = '<div class="col-span-full text-center text-gray-500 text-lg py-10">No food items available at the moment.</div>';
+                    foodItemsContainer.innerHTML = '<p class="col-span-full text-center text-gray-500">No items available.</p>';
                     return;
                 }
-                foodItemsContainer.innerHTML = ''; // Clear loading message
                 data.food_items.forEach(item => {
-                    // Determine category label class based on category name
-                    const categoryClass = item.category === 'Veg' ? 'bg-green-500' : 'bg-red-500'; // Green for Veg, Red for Non-Veg
+                    const categoryClass = item.category === 'Veg' ? 'bg-green-500' : 'bg-red-500';
+                    const imageSrc = item.image_path ? `./${item.image_path}` : 'https://placehold.co/300x200/E0E0E0/4A4A4A?text=No+Image';
                     const foodCard = `
-                        <div class="food-card bg-white rounded-xl shadow-md p-0 flex flex-col items-center text-center relative transform hover:scale-105 transition-transform duration-300 overflow-hidden">
-                            <span class="category-label ${categoryClass}">${item.category}</span>
-                            <img src="${item.image_path ? './' + item.image_path : 'https://placehold.co/300x200/E0E0E0/4A4A4A?text=No+Image'}"
-                                 onerror="this.onerror=null;this.src='https://placehold.co/300x200/E0E0E0/4A4A4A?text=No+Image';"
-                                 alt="${item.name}" class="w-full h-48 object-cover">
-                            <div class="p-4 w-full"> <h3 class="text-xl font-semibold text-gray-800 mb-2">${item.name}</h3>
-                                <p class="text-gray-600 text-sm mb-3">${item.description}</p>
+                        <div class="food-card flex flex-col">
+                            <div class="relative">
+                                <span class="category-label ${categoryClass}">${item.category}</span>
+                                <img src="${imageSrc}" onerror="this.src='https://placehold.co/300x200/E0E0E0/4A4A4A?text=Error'" alt="${item.name}">
+                            </div>
+                            <div class="p-4 flex flex-col flex-grow">
+                                <h3 class="text-xl font-semibold mb-2">${item.name}</h3>
+                                <p class="text-gray-600 text-sm mb-4 flex-grow">${item.description || ''}</p>
                                 <p class="text-2xl font-bold text-blue-600 mb-4">Rs. ${parseFloat(item.price).toFixed(2)}</p>
-                                <button data-food-id="${item.food_id}"
-                                        data-food-name="${item.name}"
-                                        data-food-price="${item.price}"
-                                        class="add-to-cart-btn bg-blue-500 text-white px-6 py-2 rounded-full hover:bg-blue-600 transition duration-200 shadow-md flex items-center justify-center space-x-2 w-full">
-                                    <i class="fas fa-plus-circle"></i>
-                                    <span>Add to Cart</span>
+                                <button data-food-id="${item.food_id}" 
+                                        data-food-name="${item.name}" 
+                                        data-food-price="${item.price}" 
+                                        data-image-path="${imageSrc}" 
+                                        class="add-to-cart-btn btn btn-accent w-full mt-auto">
+                                    <i class="fas fa-plus-circle mr-2"></i>Add to Cart
                                 </button>
                             </div>
-                        </div>
-                    `;
+                        </div>`;
                     foodItemsContainer.insertAdjacentHTML('beforeend', foodCard);
                 });
-                attachAddToCartListeners(); // Attach listeners after items are rendered
+                attachAddToCartListeners();
             } else {
-                foodItemsContainer.innerHTML = `<div class="col-span-full text-center text-red-500 text-lg py-10">${data.message}</div>`;
+                foodItemsContainer.innerHTML = `<p class="col-span-full text-red-500 text-center">${data.message}</p>`;
             }
         } catch (error) {
-            console.error('Error fetching food items:', error);
-            // This is the SyntaxError (JSON parsing failure)
-            showConfirmation('Failed to load food items. Invalid server response.', 'error');
-            foodItemsContainer.innerHTML = '<div class="col-span-full text-center text-red-500 text-lg py-10">Failed to load food items. Please check server logs.</div>';
+            foodItemsContainer.innerHTML = '<p class="col-span-full text-red-500 text-center">Failed to load items.</p>';
         }
     }
 
-    /**
-     * Attaches click listeners to "Add to Cart" buttons.
-     */
     function attachAddToCartListeners() {
         document.querySelectorAll('.add-to-cart-btn').forEach(button => {
             button.onclick = async function() {
                 const foodId = this.dataset.foodId;
                 const foodName = this.dataset.foodName;
                 const foodPrice = this.dataset.foodPrice;
+                // **FIX**: Get the image path from the data attribute
+                const imagePath = this.dataset.imagePath;
 
                 try {
                     const response = await fetch('./api/add_to_cart.php', {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ food_id: foodId, food_name: foodName, price: foodPrice, quantity: 1 })
+                        // **FIX**: Send the image path to the backend
+                        body: JSON.stringify({ food_id: foodId, food_name: foodName, price: foodPrice, quantity: 1, image_path: imagePath })
                     });
                     const result = await response.json();
-
                     if (result.success) {
                         showConfirmation(`${foodName} added to cart!`, 'success');
-                        fetchAndDisplayCartItems(); // Refresh cart display
+                        fetchAndDisplayCartItems();
                     } else {
                         showConfirmation(result.message, 'error');
                     }
                 } catch (error) {
-                    console.error('Error adding to cart:', error);
-                    showConfirmation('Failed to add item to cart.', 'error');
+                    showConfirmation('Failed to add item.', 'error');
                 }
             };
         });
     }
 
-    /**
-     * Fetches current cart items from the backend and updates the cart panel.
-     */
     async function fetchAndDisplayCartItems() {
         try {
             const response = await fetch('./api/get_cart_items.php');
             const data = await response.json();
-
             if (data.success) {
-                cart = data.cart; // Update global cart variable
-                cartItemsList.innerHTML = ''; // Clear current cart display
+                cart = data.cart;
+                cartItemsList.innerHTML = '';
                 let total = 0;
 
                 if (cart.length === 0) {
-                    cartItemsList.innerHTML = '<p class="text-gray-500 text-center">Your cart is empty.</p>';
+                    cartItemsList.innerHTML = '<div class="text-center py-10"><i class="fas fa-shopping-bag text-5xl text-gray-300 mb-3"></i><p class="text-gray-500">Cart is empty.</p></div>';
                 } else {
                     cart.forEach(item => {
-                        const itemTotal = parseFloat(item.price) * parseInt(item.quantity);
-                        total += itemTotal;
-
-                        const cartItemHtml = `
-                            <div class="flex items-center justify-between bg-gray-100 p-3 rounded-lg shadow-sm">
+                        total += parseFloat(item.price) * parseInt(item.quantity);
+                        cartItemsList.innerHTML += `
+                            <div class="flex items-center p-2 rounded-lg bg-gray-50">
                                 <div class="flex-grow">
-                                    <h4 class="font-semibold text-gray-800">${item.food_name}</h4>
-                                    <p class="text-sm text-gray-600">Rs. ${parseFloat(item.price).toFixed(2)} x ${item.quantity}</p>
+                                    <h4 class="font-semibold">${item.food_name}</h4>
+                                    <p class="text-sm text-gray-600">Rs. ${parseFloat(item.price).toFixed(2)}</p>
                                 </div>
-                                <div class="flex items-center space-x-2">
-                                    <button class="update-quantity-btn text-blue-500 hover:text-blue-700 font-bold text-lg" data-food-id="${item.food_id}" data-action="decrease">-</button>
-                                    <span class="text-lg font-medium">${item.quantity}</span>
-                                    <button class="update-quantity-btn text-blue-500 hover:text-blue-700 font-bold text-lg" data-food-id="${item.food_id}" data-action="increase">+</button>
-                                    <button class="remove-from-cart-btn text-red-500 hover:text-red-700 ml-4" data-food-id="${item.food_id}">
-                                        <i class="fas fa-trash-alt"></i>
-                                    </button>
+                                <div class="flex items-center space-x-3">
+                                    <button class="update-quantity-btn text-blue-500 font-bold" data-food-id="${item.food_id}" data-action="decrease">-</button>
+                                    <span>${item.quantity}</span>
+                                    <button class="update-quantity-btn text-blue-500 font-bold" data-food-id="${item.food_id}" data-action="increase">+</button>
+                                    <button class="remove-from-cart-btn text-red-500" data-food-id="${item.food_id}"><i class="fas fa-trash-alt"></i></button>
                                 </div>
-                            </div>
-                        `;
-                        cartItemsList.insertAdjacentHTML('beforeend', cartItemHtml);
+                            </div>`;
                     });
                 }
                 cartTotalSpan.textContent = `Rs. ${total.toFixed(2)}`;
-                attachCartItemListeners(); // Attach listeners for update/remove
-            } else {
-                showConfirmation(data.message, 'error');
-                cartItemsList.innerHTML = '<p class="text-gray-500 text-center">Failed to load cart items.</p>';
+                attachCartItemListeners();
             }
         } catch (error) {
-            console.error('Error fetching cart items:', error);
-            showConfirmation('Failed to load cart items.', 'error');
-            cartItemsList.innerHTML = '<p class="text-gray-500 text-center">Failed to load cart items.</p>';
+            cartItemsList.innerHTML = '<p class="text-red-500 text-center">Error loading cart.</p>';
         }
     }
 
-    /**
-     * Attaches listeners to cart item quantity controls and remove buttons.
-     */
     function attachCartItemListeners() {
-        document.querySelectorAll('.update-quantity-btn').forEach(button => {
+        document.querySelectorAll('.update-quantity-btn, .remove-from-cart-btn').forEach(button => {
             button.onclick = async function() {
                 const foodId = this.dataset.foodId;
-                const action = this.dataset.action; // 'increase' or 'decrease'
+                const isUpdate = this.classList.contains('update-quantity-btn');
+                const url = isUpdate ? './api/update_cart_quantity.php' : './api/remove_from_cart.php';
+                const body = isUpdate ? { food_id: foodId, action: this.dataset.action } : { food_id: foodId };
 
                 try {
-                    const response = await fetch('./api/update_cart_quantity.php', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ food_id: foodId, action: action })
-                    });
+                    const response = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
                     const result = await response.json();
-
                     if (result.success) {
-                        fetchAndDisplayCartItems(); // Refresh cart display
-                    } else {
-                        showConfirmation(result.message, 'error');
-                    }
-                } catch (error) {
-                    console.error('Error updating cart quantity:', error);
-                    showConfirmation('Failed to update item quantity.', 'error');
-                }
-            };
-        });
-
-        document.querySelectorAll('.remove-from-cart-btn').forEach(button => {
-            button.onclick = async function() {
-                const foodId = this.dataset.foodId;
-
-                try {
-                    const response = await fetch('./api/remove_from_cart.php', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ food_id: foodId })
-                    });
-                    const result = await response.json();
-
-                    if (result.success) {
-                        showConfirmation('Item removed from cart.', 'info');
-                        fetchAndDisplayCartItems(); // Refresh cart display
-                    } else {
-                        showConfirmation(result.message, 'error');
-                    }
-                } catch (error) {
-                    console.error('Error removing from cart:', error);
-                    showConfirmation('Failed to remove item from cart.', 'error');
-                }
+                        fetchAndDisplayCartItems();
+                    } else { showConfirmation(result.message, 'error'); }
+                } catch { showConfirmation('Failed to update cart.', 'error'); }
             };
         });
     }
 
-    /**
-     * Clears the cart on the server side.
-     */
     async function clearCart() {
-        console.log('Attempting to clear cart...');
         try {
-            const response = await fetch('./api/clear_cart.php', { method: 'POST' });
-            const result = await response.json();
-            if (result.success) {
-                console.log('Cart cleared successfully on server.');
-                showConfirmation('Cart cleared successfully!', 'info');
-                fetchAndDisplayCartItems(); // Refresh cart display (will show empty)
-            } else {
-                console.error('Failed to clear cart on server:', result.message);
-                showConfirmation(result.message, 'error');
-            }
-        } catch (error) {
-            console.error('Error clearing cart (network/fetch issue):', error);
-            showConfirmation('Failed to clear cart. Please try again.', 'error');
-        }
+            await fetch('./api/clear_cart.php', { method: 'POST' });
+            showConfirmation('Cart cleared!', 'info');
+            fetchAndDisplayCartItems();
+        } catch { showConfirmation('Failed to clear cart.', 'error'); }
     }
 
-    // --- Cart Action Buttons ---
+    // --- Payment Flow & Printing ---
 
-    // Attach event listener to the "Clear Cart" button
-    if (clearCartBtn) {
-        clearCartBtn.addEventListener('click', clearCart);
+    function resetPaymentModal() {
+        step1Div.classList.remove('hidden');
+        step2Div.classList.add('hidden');
+        step3Div.classList.add('hidden');
+        nfcIdInput.value = '';
+        passwordInput.value = '';
+        step1Message.textContent = '';
+        step3Message.textContent = '';
+        paymentData = {};
     }
 
-    // --- Authentication Logic ---
-
-    // Handle Login/Logout button click
-    authButton.addEventListener('click', async () => {
-        if (authButton.textContent === 'Login') {
-            // Open NFC Login Modal (NFC ID Only)
-            nfcLoginModal.classList.remove('hidden');
-            loginNfcCardIdInput.value = '';
-            loginMessage.textContent = '';
-            loginNfcCardIdInput.focus();
-        } else {
-            // Perform Logout
-            try {
-                const response = await fetch('./api/logout.php', { method: 'POST' });
-                const result = await response.json();
-                if (result.success) {
-                    showConfirmation('Logged out successfully!', 'info');
-                    updateAuthUI(false); // Update UI to logged out state
-                    clearCart(); // Clear cart on logout
-                } else {
-                    showConfirmation(result.message, 'error');
-                }
-            } catch (error) {
-                console.error('Error during logout:', error);
-                showConfirmation('Failed to logout. Please try again.', 'error');
-            }
+    payOrderBtn.addEventListener('click', () => {
+        if (cart.length === 0) {
+            showConfirmation('Cart is empty.', 'info');
+            return;
         }
+        resetPaymentModal();
+        paymentFlowModal.classList.remove('hidden');
+        nfcIdInput.focus();
     });
 
-    // Close NFC Login Modal
-    closeNfcLoginModalBtn.addEventListener('click', () => {
-        nfcLoginModal.classList.add('hidden');
-    });
-    nfcLoginModal.addEventListener('click', (event) => {
-        if (event.target === nfcLoginModal) {
-            nfcLoginModal.classList.add('hidden');
-        }
-    });
+    function closePaymentModal() { paymentFlowModal.classList.add('hidden'); }
+    closePaymentModalBtn.addEventListener('click', closePaymentModal);
+    confirmCancelBtn.addEventListener('click', closePaymentModal);
 
-    // Handle NFC Login confirmation (NFC ID Only)
-    loginConfirmButton.addEventListener('click', async () => {
-        const nfcId = loginNfcCardIdInput.value.trim();
-
+    nfcScanProceedBtn.addEventListener('click', async () => {
+        const nfcId = nfcIdInput.value.trim();
         if (!nfcId) {
-            loginMessage.textContent = 'Please enter your NFC Card ID.';
-            loginMessage.style.color = 'red';
+            step1Message.textContent = 'NFC ID cannot be empty.';
             return;
         }
-
-        loginConfirmButton.disabled = true;
-        loginConfirmButton.textContent = 'Logging in...';
-        loginMessage.textContent = '';
+        nfcScanProceedBtn.disabled = true;
+        nfcScanProceedBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Verifying...';
 
         try {
-            const response = await fetch('./api/nfc_login.php', { // New API for login
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ nfc_id: nfcId }) // Only send NFC ID
-            });
+            const response = await fetch('./api/nfc_login.php', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ nfc_id: nfcId }) });
             const result = await response.json();
 
             if (result.success) {
-                loginMessage.textContent = 'Login successful!';
-                loginMessage.style.color = 'green';
-                // Pass student name and balance to updateAuthUI
-                updateAuthUI(true, result.student_name, result.student_balance);
-                setTimeout(() => {
-                    nfcLoginModal.classList.add('hidden');
-                    showConfirmation('Welcome, ' + result.student_name + '!', 'success');
-                }, 1000);
-            } else {
-                loginMessage.textContent = result.message;
-                loginMessage.style.color = 'red';
-            }
-        } catch (error) {
-            console.error('Error during NFC login:', error);
-            loginMessage.textContent = 'An error occurred during login. Please try again.';
-            loginMessage.style.color = 'red';
-        } finally {
-            loginConfirmButton.disabled = false;
-            loginConfirmButton.textContent = 'Login';
-        }
-    });
-
-    // --- Payment Logic ---
-
-    // Attach event listener to the "Pay Now" button in the live cart
-    if (payOrderBtn) {
-        payOrderBtn.addEventListener('click', async function(event) {
-            event.preventDefault();
-
-            if (cart.length === 0) {
-                showConfirmation('Your cart is empty. Please add items before confirming.', 'info');
-                return;
-            }
-
-            // Check if user is logged in
-            const authCheckResponse = await fetch('./api/check_auth.php'); // New API to check session auth
-            const authCheckResult = await authCheckResponse.json();
-
-            if (!authCheckResult.is_logged_in) {
-                showConfirmation('Please login first to proceed with payment.', 'info');
-                authButton.click(); // Simulate click on login button to open login modal
-                return;
-            }
-
-            // If logged in, open password-only payment modal
-            passwordOnlyModal.classList.remove('hidden');
-            paymentPasswordInput.value = '';
-            paymentMessage.textContent = '';
-            paymentPasswordInput.focus();
-        });
-    }
-
-    // Close Password Only Payment Modal
-    closePasswordOnlyModalBtn.addEventListener('click', () => {
-        passwordOnlyModal.classList.add('hidden');
-    });
-    passwordOnlyModal.addEventListener('click', (event) => {
-        if (event.target === passwordOnlyModal) {
-            passwordOnlyModal.classList.add('hidden');
-        }
-    });
-
-    // Handle Password Only Payment confirmation
-    paymentConfirmButton.addEventListener('click', async () => {
-        const password = paymentPasswordInput.value.trim();
-
-        if (!password) {
-            paymentMessage.textContent = 'Please enter your password.';
-            paymentMessage.style.color = 'red';
-            return;
-        }
-
-        paymentConfirmButton.disabled = true;
-        paymentConfirmButton.textContent = 'Confirming...';
-        paymentMessage.textContent = '';
-
-        try {
-            // Send the password and cart items to the backend for final processing
-            const response = await fetch('./api/process_nfc_order.php', { // Re-using process_nfc_order.php
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    password: password,
-                    cart_items: cart // Send the current cart state
-                })
-            });
-
-            const result = await response.json();
-
-            if (result.success) {
-                paymentMessage.textContent = 'Order confirmed! New balance: Rs. ' + parseFloat(result.new_balance).toFixed(2);
-                paymentMessage.style.color = 'green';
-                // Update balance display on the main page
-                // We need to ensure the link is preserved after balance update
-                updateAuthUI(true, result.student_name, result.new_balance); // Re-call updateAuthUI to refresh name/balance
-
-                // Update session info after successful payment
-                const updateSessionResponse = await fetch('./api/update_session_balance.php', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ new_balance: result.new_balance })
+                paymentData = { nfcId, studentName: result.student_name, balance: parseFloat(result.student_balance), bill: parseFloat(cartTotalSpan.textContent.replace('Rs. ', '')) };
+                studentNameSpan.textContent = paymentData.studentName;
+                currentBalanceSpan.textContent = `Rs. ${paymentData.balance.toFixed(2)}`;
+                totalBillSpan.textContent = `Rs. ${paymentData.bill.toFixed(2)}`;
+                
+                paymentBillDetails.innerHTML = '';
+                cart.forEach(item => {
+                    // **FIX**: Using the new 3-column layout classes
+                    paymentBillDetails.innerHTML += `
+                        <div class="bill-item">
+                            <div class="bill-item-col-left">
+                                <img src="${item.image_path}" class="bill-item-img" alt="${item.food_name}">
+                                <span class="bill-item-name">${item.food_name}</span>
+                            </div>
+                            <div class="bill-item-col-mid">x ${item.quantity}</div>
+                            <div class="bill-item-col-right">Rs. ${(item.quantity * item.price).toFixed(2)}</div>
+                        </div>`;
                 });
-                await updateSessionResponse.json();
 
-
-                // Clear cart and close modal after a short delay
-                setTimeout(() => {
-                    clearCart(); // Call the function to clear server-side cart
-                    fetchAndDisplayCartItems(); // Refresh cart display (will show empty)
-                    passwordOnlyModal.classList.add('hidden');
-                    showConfirmation('Order placed successfully!', 'success');
-                }, 1500);
-
+                step1Div.classList.add('hidden');
+                step2Div.classList.remove('hidden');
             } else {
-                paymentMessage.textContent = result.message;
-                paymentMessage.style.color = 'red';
+                step1Message.textContent = result.message || 'Invalid NFC ID.';
             }
-        } catch (error) {
-            console.error('Error during payment confirmation:', error);
-            paymentMessage.textContent = 'An error occurred during payment. Please try again.';
-            paymentMessage.style.color = 'red';
+        } catch (e) {
+            step1Message.textContent = 'An error occurred.';
         } finally {
-            paymentConfirmButton.disabled = false;
-            paymentConfirmButton.textContent = 'Confirm & Pay';
+            nfcScanProceedBtn.disabled = false;
+            nfcScanProceedBtn.innerHTML = '<i class="fas fa-arrow-right mr-2"></i>Proceed';
         }
     });
 
-    // --- Initial Load ---
-    fetchAndDisplayFoodItems();
-    fetchAndDisplayCartItems(); // Also fetch initial cart state on load
-    // Check initial auth state to set Login/Logout button correctly
-    fetch('./api/check_auth.php')
-        .then(response => response.json())
-        .then(data => {
-            if (data.is_logged_in) {
-                // Call updateAuthUI with the fetched data to correctly set the link
-                updateAuthUI(true, data.student_name, data.student_balance);
+    confirmProceedBtn.addEventListener('click', () => {
+        if (paymentData.balance < paymentData.bill) {
+            showConfirmation('Insufficient balance!', 'error');
+            closePaymentModal();
+            return;
+        }
+        step2Div.classList.add('hidden');
+        step3Div.classList.remove('hidden');
+        passwordInput.focus();
+    });
+
+    finalPayBtn.addEventListener('click', async () => {
+        const password = passwordInput.value;
+        if (!password) {
+            step3Message.textContent = 'Password is required.';
+            return;
+        }
+        finalPayBtn.disabled = true;
+        finalPayBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Processing...';
+        
+        try {
+            const response = await fetch('./api/process_nfc_order.php', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ nfc_id: paymentData.nfcId, password, cart_items: cart }) });
+            const result = await response.json();
+
+            if (result.success) {
+                showConfirmation('Order successful!', 'success');
+                closePaymentModal();
+                generatePrintableCoupon(result.student_name, result.transaction_id, cart); 
+                clearCart();
             } else {
-                updateAuthUI(false);
+                step3Message.textContent = result.message || 'Payment failed.';
             }
-        })
-        .catch(error => {
-            console.error('Error checking initial auth state:', error);
-            updateAuthUI(false); // Default to logged out on error
-        });
+        } catch (e) {
+            step3Message.textContent = 'A critical error occurred.';
+        } finally {
+            finalPayBtn.disabled = false;
+            finalPayBtn.innerHTML = '<i class="fas fa-check-circle mr-2"></i>Confirm & Pay';
+        }
+    });
+
+   function generatePrintableCoupon(studentName, orderId, orderedItems) {
+    // 1. Create receipt HTML
+    let itemsHtml = orderedItems.map(item => `
+        <tr>
+            <td style="padding: 2px 3px; text-align: left; border-bottom: 1px dashed #ccc;">${item.food_name}</td>
+            <td style="padding: 2px 3px; text-align: center; border-bottom: 1px dashed #ccc;">${item.quantity}</td>
+            <td style="padding: 2px 3px; text-align: right; border-bottom: 1px dashed #ccc;">Rs. ${(item.price * item.quantity).toFixed(2)}</td>
+        </tr>
+    `).join('');
+
+    const total = orderedItems.reduce((sum, item) => sum + (item.price * item.quantity), 0).toFixed(2);
+
+    const receiptHtml = `
+    <!DOCTYPE html>
+    <html>
+    <head>
+        <title>Order Receipt #${orderId}</title>
+        <style>
+            @page {
+                size: 80mm auto;
+                margin: 3mm; /* Controls the outer margins, removing browser headers/footers */
+            }
+            body {
+                font-family: 'monospace', 'Arial', sans-serif; /* Monospace fonts are good for alignment */
+                width: 100%;
+                color: #000;
+                font-size: 8.5pt; /* Slightly smaller base font size */
+                line-height: 1.2; /* Tighter line spacing */
+            }
+            .header, .footer { text-align: center; }
+            .header { border-bottom: 1px dashed #000; padding-bottom: 3px; margin-bottom: 8px; } /* Reduced padding/margin */
+            .header h2 { margin: 0; font-size: 12pt; } /* Further adjusted header font size */
+            .header p, .info p { margin: 1px 0; } /* Tighter margins for info lines */
+            table { width: 100%; border-collapse: collapse; margin-top: 5px; }
+            /* Adjusted padding for table headers and cells for better spacing */
+            th, td {
+                padding: 2px 3px; /* Slightly reduced padding to gain space */
+                border-bottom: 1px dashed #000; /* Changed to dashed for more traditional receipt look */
+                white-space: nowrap; /* Prevent wrapping for price and quantity */
+            }
+            th {
+                text-align: right; /* Default align right for price and quantity columns */
+                font-size: 9pt; /* Slightly smaller font for headers */
+            }
+            th:first-child { text-align: left; } /* Align first header to the left */
+
+            /* Specific column widths for better control */
+            table thead tr th:nth-child(1),
+            table tbody tr td:nth-child(1) {
+                width: 55%; /* Allocate more width for the item name */
+            }
+            table thead tr th:nth-child(2),
+            table tbody tr td:nth-child(2) {
+                width: 15%; /* Width for quantity */
+                text-align: center;
+            }
+            table thead tr th:nth-child(3),
+            table tbody tr td:nth-child(3) {
+                width: 30%; /* Width for price */
+                text-align: right;
+            }
+
+            .total {
+                font-weight: bold;
+                text-align: right;
+                margin-top: 8px; /* Reduced margin */
+                font-size: 10.5pt; /* Adjusted total font size */
+                padding-right: 3px; /* Ensure padding on the right for total */
+            }
+            .footer { margin-top: 10px; } /* Reduced margin */
+        </style>
+    </head>
+    <body>
+        <div class="header">
+            <h2>United Technical Khaja Ghar</h2>
+            <p>Order Receipt</p>
+        </div>
+        <div class="info">
+            <p><strong>Order #:</strong> ${orderId}</p>
+            <p><strong>Student:</strong> ${studentName}</p>
+            <p><strong>Date:</strong> ${new Date().toLocaleString()}</p>
+        </div>
+        <table>
+            <thead>
+                <tr>
+                    <th>Item</th>
+                    <th style="text-align: center;">Qty</th>
+                    <th style="text-align: right;">Price</th>
+                </tr>
+            </thead>
+            <tbody>${itemsHtml}</tbody>
+        </table>
+        <div class="total">Total: Rs. ${total}</div>
+        <div class="footer"><p>Thank you for your order!</p></div>
+    </body>
+    </html>`;
+
+    // 2. Create a hidden iframe and print its content
+    const iframe = document.createElement('iframe');
+    iframe.style.position = 'absolute';
+    iframe.style.width = '0';
+    iframe.style.height = '0';
+    iframe.style.border = 'none';
+    iframe.style.left = '-9999px';
+    document.body.appendChild(iframe);
+
+    iframe.contentDocument.open();
+    iframe.contentDocument.write(receiptHtml);
+    iframe.contentDocument.close();
+
+    // Wait for content to load before printing
+    iframe.onload = function() {
+        iframe.contentWindow.focus();
+        iframe.contentWindow.print();
+
+        setTimeout(() => {
+            document.body.removeChild(iframe);
+        }, 1000); // Give a little time for the print dialog to appear before removing
+    };
+}
+
+
+    clearCartBtn.addEventListener('click', clearCart);
+    fetchAndDisplayFoodItems();
+    fetchAndDisplayCartItems();
 });

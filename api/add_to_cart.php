@@ -1,5 +1,5 @@
 <?php
-// scps1/api/add_to_cart.php - Adds an item to the session cart
+// scps1/api/add_to_cart.php - Adds an item to the session cart with image support
 
 session_start();
 header('Content-Type: application/json');
@@ -10,6 +10,7 @@ $food_id = $input['food_id'] ?? null;
 $food_name = $input['food_name'] ?? null;
 $price = $input['price'] ?? null;
 $quantity = $input['quantity'] ?? 1; // Default to 1 if not provided
+$image_path = $input['image_path'] ?? ''; // Get image path (empty string if not provided)
 
 if (empty($food_id) || empty($food_name) || !isset($price)) {
     echo json_encode(['success' => false, 'message' => 'Invalid item data.']);
@@ -36,7 +37,8 @@ if (!$item_added) {
         'food_id' => $food_id,
         'food_name' => $food_name,
         'price' => $price,
-        'quantity' => $quantity
+        'quantity' => $quantity,
+        'image_path' => $image_path // Store the image path
     ];
 }
 
