@@ -166,7 +166,7 @@ if (!isset($_SESSION['cart'])) {
 
             <!-- Step 1: Scan NFC -->
             <div id="step1_scanNfc">
-                <div class="text-center mb-5"><i class="fas fa-id-card text-4xl text-accent-color mb-3"></i><h2 class="text-2xl modal-title">Step 1: Scan Card</h2><p class="text-gray-600">Enter NFC Card ID.</p></div>
+                <div class="text-center mb-5"><i class="fas fa-id-card text-4xl text-accent-color mb-3"></i><h2 class="text-2xl modal-title">Scan Card</h2><p class="text-gray-600">Enter NFC Card ID.</p></div>
                 <div class="mb-5"><label for="paymentNfcIdInput" class="block font-bold mb-2">NFC Card ID:</label><input type="text" id="paymentNfcIdInput" placeholder="Enter NFC ID"></div>
                 <button id="nfcScanProceedBtn" class="w-full btn btn-accent py-3"><i class="fas fa-arrow-right mr-2"></i>Proceed</button>
                 <p id="step1_message" class="text-center mt-3 text-xs font-medium text-red-600"></p>
@@ -174,7 +174,7 @@ if (!isset($_SESSION['cart'])) {
 
             <!-- Step 2: Confirm Details -->
             <div id="step2_confirmDetails" class="hidden">
-                <div class="text-center mb-5"><i class="fas fa-user-check text-4xl text-green-500 mb-3"></i><h2 class="text-2xl modal-title">Step 2: Confirm Order</h2><p class="text-gray-600">Review the order details below.</p></div>
+                <div class="text-center mb-5"><i class="fas fa-user-check text-4xl text-green-500 mb-3"></i><h2 class="text-2xl modal-title">Confirm Order</h2><p class="text-gray-600">Review the order details below.</p></div>
                 <div class="bg-gray-50 rounded-lg p-4 border mb-4">
                     <div class="flex justify-between font-semibold mb-3"><span>Student:</span><span id="paymentStudentName"></span></div>
                     <div class="flex justify-between font-semibold text-green-600"><span>Card Balance:</span><span id="paymentCurrentBalance"></span></div>
@@ -190,7 +190,7 @@ if (!isset($_SESSION['cart'])) {
 
             <!-- Step 3: Enter Password -->
             <div id="step3_enterPassword" class="hidden">
-                <div class="text-center mb-5"><i class="fas fa-lock text-4xl text-accent-color mb-3"></i><h2 class="text-2xl modal-title">Step 3: Enter Password</h2><p class="text-gray-600">Enter password to finalize payment.</p></div>
+                <div class="text-center mb-5"><i class="fas fa-lock text-4xl text-accent-color mb-3"></i><h2 class="text-2xl modal-title">Enter Password</h2><p class="text-gray-600">Enter password to finalize payment.</p></div>
                 <div class="mb-6"><label for="paymentPasswordInput" class="block font-bold mb-2">Password:</label><input type="password" id="paymentPasswordInput" placeholder="Enter password"></div>
                 <button id="finalPayBtn" class="w-full btn btn-success-custom py-3"><i class="fas fa-check-circle mr-2"></i>Confirm & Pay</button>
                 <p id="step3_message" class="text-center mt-3 text-xs font-medium text-red-600"></p>
