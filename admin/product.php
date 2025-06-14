@@ -49,6 +49,31 @@ include '../includes/admin_header.php'; // Ensure this path is correct
          .modal-active {
              overflow: hidden; /* Prevent scrolling when modal is open */
          }
+         /* Ensure table container allows horizontal scrolling on small screens */
+         @media (max-width: 768px) { /* Applies to screens smaller than md breakpoint (768px) */
+             .overflow-x-auto-md {
+                 overflow-x: auto;
+             }
+         }
+         /* Modal specific adjustments for small screens */
+         #productModal > div { /* The inner div (white box) that contains the modal content */
+            max-height: 95vh; /* Limit modal height to 95% of viewport height */
+            margin: 2.5vh auto; /* Center with a small vertical margin */
+            display: flex; /* Use flexbox for header, body, footer layout */
+            flex-direction: column; /* Stack children vertically */
+            /* Do NOT put overflow-y: auto here, as it would scroll the whole modal including header/footer */
+         }
+         /* Ensure the form area within the modal is scrollable */
+         #productModal .modal-scroll-content {
+             flex-grow: 1; /* Allows this div to grow and take available space */
+             overflow-y: auto; /* This makes the content within this div scrollable */
+             padding: 1.5rem; /* Equivalent to px-6 py-4, applied here */
+             min-height: 0; /* Critical for flex items with overflow */
+         }
+         /* Remove default padding from form as it's now on the modal-scroll-content wrapper */
+         #productForm {
+             padding: 0;
+         }
      </style>
 </head>
 
@@ -85,49 +110,52 @@ include '../includes/admin_header.php'; // Ensure this path is correct
                         </svg>
                     </button>
                 </div>
-                <form id="productForm" class="px-6 py-4" enctype="multipart/form-data"> <input type="hidden" id="productId" name="productId" value=""> <div class="mb-4">
-                        <label for="productName" class="block text-sm font-medium text-gray-700 mb-1">Product Name</label>
-                        <input type="text" id="productName" name="productName"
-                            class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                            required>
-                    </div>
-                    <div class="mb-4">
-                        <label for="productPrice" class="block text-sm font-medium text-gray-700 mb-1">Price (₹)</label>
-                        <input type="number" id="productPrice" name="productPrice" min="0" step="0.01"
-                            class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                            required>
-                    </div>
-                    <div class="mb-4">
-                        <label for="productCategory"
-                            class="block text-sm font-medium text-gray-700 mb-1">Category</label>
-                        <select id="productCategory" name="productCategory"
-                            class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500">
-                            <option value="">Select Category</option>
-                            <option value="Veg">Veg</option>
-                            <option value="Non-Veg">Non-Veg</option>
-                            <option value="Beverage">Beverage</option>
-                            <option value="Snack">Snack</option>
-                            <option value="Dessert">Dessert</option>
-                        </select>
-                    </div>
-                    <div class="mb-4">
-                        <label for="productDescription"
-                            class="block text-sm font-medium text-gray-700 mb-1">Description</label>
-                        <textarea id="productDescription" name="productDescription" rows="3"
-                            class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500"></textarea>
-                    </div>
-                    <div class="mb-4">
-                        <label class="block text-sm font-medium text-gray-700 mb-1" for="productImage">Product Image</label>
-                        <input class="block w-full text-sm text-gray-900 border border-gray-300 rounded-lg cursor-pointer bg-gray-50 focus:outline-none" aria-describedby="product_image_help" id="productImage" name="productImage" type="file" accept="image/*">
-                        <p class="mt-1 text-sm text-gray-500" id="product_image_help">JPG, PNG, or GIF (Recommended: Square image).</p>
-                         <img id="imagePreview" src="#" alt="Image Preview" class="mt-2 hidden w-24 h-24 object-cover rounded">
-                    </div>
-                    <div class="flex items-center mb-4">
-                        <input id="productAvailable" name="productAvailable" type="checkbox"
-                            class="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded">
-                        <label for="productAvailable" class="ml-2 block text-sm text-gray-700">Available for sale</label>
-                    </div>
-                </form>
+                <!-- This new div will be the scrollable part of the modal body -->
+                <div class="modal-scroll-content">
+                    <form id="productForm" enctype="multipart/form-data"> <input type="hidden" id="productId" name="productId" value=""> <div class="mb-4">
+                            <label for="productName" class="block text-sm font-medium text-gray-700 mb-1">Product Name</label>
+                            <input type="text" id="productName" name="productName"
+                                class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                                required>
+                        </div>
+                        <div class="mb-4">
+                            <label for="productPrice" class="block text-sm font-medium text-gray-700 mb-1">Price (₹)</label>
+                            <input type="number" id="productPrice" name="productPrice" min="0" step="0.01"
+                                class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                                required>
+                        </div>
+                        <div class="mb-4">
+                            <label for="productCategory"
+                                class="block text-sm font-medium text-gray-700 mb-1">Category</label>
+                            <select id="productCategory" name="productCategory"
+                                class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500">
+                                <option value="">Select Category</option>
+                                <option value="Veg">Veg</option>
+                                <option value="Non-Veg">Non-Veg</option>
+                                <option value="Beverage">Beverage</option>
+                                <option value="Snack">Snack</option>
+                                <option value="Dessert">Dessert</option>
+                            </select>
+                        </div>
+                        <div class="mb-4">
+                            <label for="productDescription"
+                                class="block text-sm font-medium text-gray-700 mb-1">Description</label>
+                            <textarea id="productDescription" name="productDescription" rows="5"
+                                class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500 resize-y"></textarea>
+                        </div>
+                        <div class="mb-4">
+                            <label class="block text-sm font-medium text-gray-700 mb-1" for="productImage">Product Image</label>
+                            <input class="block w-full text-sm text-gray-900 border border-gray-300 rounded-lg cursor-pointer bg-gray-50 focus:outline-none" aria-describedby="product_image_help" id="productImage" name="productImage" type="file" accept="image/*">
+                            <p class="mt-1 text-sm text-gray-500" id="product_image_help">JPG, PNG, or GIF (Recommended: Square image).</p>
+                             <img id="imagePreview" src="#" alt="Image Preview" class="mt-2 hidden w-24 h-24 object-cover rounded">
+                        </div>
+                        <div class="flex items-center mb-4">
+                            <input id="productAvailable" name="productAvailable" type="checkbox"
+                                class="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded">
+                            <label for="productAvailable" class="ml-2 block text-sm text-gray-700">Available for sale</label>
+                        </div>
+                    </form>
+                </div>
                 <div class="bg-gray-50 px-6 py-4 flex justify-end border-t border-gray-200">
                     <button type="button" id="cancelModalBtn"
                         class="mr-3 px-4 py-2 border border-gray-300 rounded-md text-sm font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500">
@@ -141,7 +169,8 @@ include '../includes/admin_header.php'; // Ensure this path is correct
             </div>
         </div>
         <div class="bg-white shadow overflow-hidden rounded-lg">
-            <div class="overflow-x-auto">
+            <!-- Added a wrapper div with overflow-x-auto for smaller screens -->
+            <div class="overflow-x-auto overflow-x-auto-md">
                 <table class="min-w-full divide-y divide-gray-200">
                     <thead class="bg-gray-50">
                         <tr>
